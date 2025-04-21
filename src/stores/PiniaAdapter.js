@@ -60,26 +60,30 @@ class PiniaAdapter extends StoreAdapter {
       return;
     }
     this.adapter.onDataChanged(async (data) => {
-      if (data.adapterId == this.adapter.adapterId || !data.origin) {
-        return;
-      }
-      
-      let dataToPatch;
-      if (!data.value) {
-        dataToPatch = await this.adapter.get(data.key);
-      } else {
-        dataToPatch = await this.adapter._decrypt(data.key, data.value);
-      }
+      try {
+        if (data.adapterId == this.adapter.adapterId || !data.origin) {
+          return;
+        }
 
-      if (JSON.stringify(store.$state) === JSON.stringify(dataToPatch)) {
-        return;
+        let dataToPatch;
+        if (!data.value) {
+          dataToPatch = await this.adapter.get(data.key);
+        } else {
+          dataToPatch = await this.adapter._decrypt(data.key, data.value);
+        }
+
+        if (JSON.stringify(store.$state) === JSON.stringify(dataToPatch)) {
+          return;
+        }
+
+        store.$state = {
+          ...store.$state,
+          ...dataToPatch,
+          STORAGEFY_SILENT_CHANNEL_UPDATE: true,
+        };
+      } catch (error) {
+        logError("PiniaAdapter - onDataChanged - error:", error);
       }
-      
-      store.$state = {
-        ...store.$state,
-        ...dataToPatch,
-        STORAGEFY_SILENT_CHANNEL_UPDATE: true,
-      };
     });
   }
 

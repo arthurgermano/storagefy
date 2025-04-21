@@ -51,39 +51,43 @@ class SvelteAdapter extends StoreAdapter {
    */
   _registerOnDataChanged(store) {
     logInfo("SvelteAdapter - Registering onDataChanged listener");
-    if (!store) {
-      return;
-    }
-    this.adapter.onDataChanged(async (data) => {
-      if (data.adapterId == this.adapter.adapterId || !data.origin) {
+    try {
+      if (!store) {
         return;
       }
+      this.adapter.onDataChanged(async (data) => {
+        if (data.adapterId == this.adapter.adapterId || !data.origin) {
+          return;
+        }
 
-      let currentState;
-      const unsubscribe = store.subscribe((value) => {
-        currentState = assign({}, value);
+        let currentState;
+        const unsubscribe = store.subscribe((value) => {
+          currentState = assign({}, value);
+        });
+        unsubscribe();
+
+        let dataToPatch;
+        if (!data.value) {
+          dataToPatch = await this.adapter.get(data.key);
+        } else {
+          dataToPatch = await this.adapter._decrypt(data.key, data.value);
+        }
+        if (JSON.stringify(currentState) === JSON.stringify(dataToPatch)) {
+          return;
+        }
+
+        // Update store with the patched data
+        // In Svelte, we update the store directly
+        store.update((currentState) => ({
+          ...currentState,
+          ...dataToPatch,
+          STORAGEFY_SILENT_CHANNEL_UPDATE: true,
+        }));
       });
-      unsubscribe();
-
-      let dataToPatch;
-      if (!data.value) {
-        dataToPatch = await this.adapter.get(data.key);
-      } else {
-        dataToPatch = await this.adapter._decrypt(data.key, data.value);
-      }
-      if (JSON.stringify(currentState) === JSON.stringify(dataToPatch)) {
-        return;
-      }
-      console.log("OK")
-
-      // Update store with the patched data
-      // In Svelte, we update the store directly
-      store.update((currentState) => ({
-        ...currentState,
-        ...dataToPatch,
-        STORAGEFY_SILENT_CHANNEL_UPDATE: true,
-      }));
-    });
+    } catch (error) {
+      logError("SvelteAdapter - onDataChanged error:", error);
+      throw error;
+    }
   }
 
   // ----------------------------------------------------------------------------------------------

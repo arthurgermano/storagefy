@@ -1,6 +1,5 @@
-import * as Storagefy from "../../../../../../src/index.js";
+import * as Storagefy from "storagefy";
 import store from "./store.js";
-import { setItems } from "./cartSlice.js";
 
 // ------------------------------------------------------------------------------------------------
 

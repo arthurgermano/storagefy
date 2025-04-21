@@ -1,5 +1,5 @@
 import { atom, createStore as createJotaiInternalStore } from "jotai";
-import * as Storagefy from "../../../../../../src/index.js";
+import * as Storagefy from "storagefy";
 
 // ------------------------------------------------------------------------------------------------
 

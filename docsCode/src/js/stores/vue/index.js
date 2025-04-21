@@ -1,6 +1,5 @@
-import { init } from "astro/virtual-modules/prefetch.js";
 import { defineStore, createPinia } from "pinia";
-import * as Storagefy from "../../../../../src/index.js";
+import * as Storagefy from "storagefy";
 
 // ------------------------------------------------------------------------------------------------
 

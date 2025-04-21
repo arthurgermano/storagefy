@@ -46,7 +46,11 @@ async function getCrypto() {
   }
 }
 
-await getCrypto();
+try {
+  await getCrypto();
+} catch (error) {
+  logError("Failed to initialize crypto:", error);
+}
 
 // ------------------------------------------------------------------------------------------------
 
