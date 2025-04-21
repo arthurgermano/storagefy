@@ -1,6 +1,6 @@
 {
   "name": "storagefy",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Framework-agnostic adapter system for syncing state libraries (Pinia, Zustand, Redux, Jotai, Svelte, etc.) with browser storage (localStorage, sessionStorage, IndexedDB).",
   "main": "dist/index.cjs",
   "module": "./dist/index.js",

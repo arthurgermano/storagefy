@@ -845,6 +845,7 @@ class IndexedDBAdapter extends StorageAdapter {
     this.enableSyncTabs = enableSyncTabs || false;
     this.expireCheckInterval = expireCheckInterval;
     this.dbPromise = null;
+
     this._initDB({ dbName, version, description });
     this._startExpireWatcher();
 
@@ -939,26 +940,19 @@ class IndexedDBAdapter extends StorageAdapter {
       `IndexedDBAdapter - Waiting for database readiness with timeout: ${timeout}ms, tries: ${tries}`
     );
     return new Promise(async (resolve, reject) => {
-      try {
-        await sleep(timeout);
+      let attempt = 0;
+      while (!this.isReady && attempt++ <= tries) {
         if (this.isReady) {
           resolve();
           return true;
         }
 
-        let attempt = 0;
-        while (!this.isReady && attempt++ < tries) {
-          setTimeout(() => {
-            if (this.isReady) {
-              resolve();
-              return true;
-            }
-          }, timeout);
-        }
-      } catch (error) {
-        return reject(error);
+        await sleep(timeout);
       }
-
+      if (this.isReady) {
+        resolve();
+        return true;
+      }
       reject(new Error("Database is not ready"));
     });
   }
