@@ -1,0 +1,153 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><link rel="icon" type="image/svg+xml" href="/favicon.svg"><meta name="generator" content="Astro v5.6.1"><title>Storagefy | Frontend Storage Adapter</title><!-- Fonts --><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet"><!-- Meta tags --><meta name="description" content="Frontend storage adapter with framework integrations for IndexedDB, LocalStorage, and SessionStorage as well stores like Pinia, Svelte and React"><meta property="og:title" content="Storagefy"><meta property="og:description" content="Cross-framework storage solution for modern web applications"><meta property="og:type" content="website"><meta property="og:url" content="https://arthurgermano.github.com/storagefy"><script>
+      (() => {
+        try {
+          const raw = localStorage.getItem("storagefy__Storagefy_App");
+          const parsed = JSON.parse(raw || "{}");
+          const mode = parsed?.mode;
+
+          // Delay to ensure body is available
+          requestAnimationFrame(() => {
+            if (!document.body) return;
+
+            if (mode === "dark") {
+              document.body.classList.add("dark");
+            } else {
+              document.body.classList.remove("dark");
+            }
+          });
+        } catch (err) {
+          console.error("Failed to load theme mode from storage:", err);
+        }
+      })();
+    </script><link rel="stylesheet" href="/storagefy/_astro/exports-usage.BQxDOPS-.css"></head> <body class=""> <header class="strf-header"> <span></span> <a href="/" class="strf-logo" style="margin-left: -1rem"> <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"> <path d="M12 2C17 2 21 3.79 21 6V18C21 20.21 17 22 12 22C7 22 3 20.21 3 18V6C3 3.79 7 2 12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M21 6C21 8.21 17 10 12 10C7 10 3 8.21 3 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M21 12C21 14.21 17 16 12 16C7 16 3 14.21 3 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path> </svg> <style>astro-island,astro-slot,astro-static-slot{display:contents}</style><script>(()=>{var a=(s,i,o)=>{let r=async()=>{await(await s())()},t=typeof i.value=="object"?i.value:void 0,c={rootMargin:t==null?void 0:t.rootMargin},n=new IntersectionObserver(e=>{for(let l of e)if(l.isIntersecting){n.disconnect(),r();break}},c);for(let e of o.children)n.observe(e)};(self.Astro||(self.Astro={})).visible=a;window.dispatchEvent(new Event("astro:visible"));})();;(()=>{var A=Object.defineProperty;var g=(i,o,a)=>o in i?A(i,o,{enumerable:!0,configurable:!0,writable:!0,value:a}):i[o]=a;var d=(i,o,a)=>g(i,typeof o!="symbol"?o+"":o,a);{let i={0:t=>m(t),1:t=>a(t),2:t=>new RegExp(t),3:t=>new Date(t),4:t=>new Map(a(t)),5:t=>new Set(a(t)),6:t=>BigInt(t),7:t=>new URL(t),8:t=>new Uint8Array(t),9:t=>new Uint16Array(t),10:t=>new Uint32Array(t),11:t=>1/0*t},o=t=>{let[l,e]=t;return l in i?i[l](e):void 0},a=t=>t.map(o),m=t=>typeof t!="object"||t===null?t:Object.fromEntries(Object.entries(t).map(([l,e])=>[l,o(e)]));class y extends HTMLElement{constructor(){super(...arguments);d(this,"Component");d(this,"hydrator");d(this,"hydrate",async()=>{var b;if(!this.hydrator||!this.isConnected)return;let e=(b=this.parentElement)==null?void 0:b.closest("astro-island[ssr]");if(e){e.addEventListener("astro:hydrate",this.hydrate,{once:!0});return}let c=this.querySelectorAll("astro-slot"),n={},h=this.querySelectorAll("template[data-astro-template]");for(let r of h){let s=r.closest(this.tagName);s!=null&&s.isSameNode(this)&&(n[r.getAttribute("data-astro-template")||"default"]=r.innerHTML,r.remove())}for(let r of c){let s=r.closest(this.tagName);s!=null&&s.isSameNode(this)&&(n[r.getAttribute("name")||"default"]=r.innerHTML)}let p;try{p=this.hasAttribute("props")?m(JSON.parse(this.getAttribute("props"))):{}}catch(r){let s=this.getAttribute("component-url")||"<unknown>",v=this.getAttribute("component-export");throw v&&(s+=` (export ${v})`),console.error(`[hydrate] Error parsing props for component ${s}`,this.getAttribute("props"),r),r}let u;await this.hydrator(this)(this.Component,p,n,{client:this.getAttribute("client")}),this.removeAttribute("ssr"),this.dispatchEvent(new CustomEvent("astro:hydrate"))});d(this,"unmount",()=>{this.isConnected||this.dispatchEvent(new CustomEvent("astro:unmount"))})}disconnectedCallback(){document.removeEventListener("astro:after-swap",this.unmount),document.addEventListener("astro:after-swap",this.unmount,{once:!0})}connectedCallback(){if(!this.hasAttribute("await-children")||document.readyState==="interactive"||document.readyState==="complete")this.childrenConnectedCallback();else{let e=()=>{document.removeEventListener("DOMContentLoaded",e),c.disconnect(),this.childrenConnectedCallback()},c=new MutationObserver(()=>{var n;((n=this.lastChild)==null?void 0:n.nodeType)===Node.COMMENT_NODE&&this.lastChild.nodeValue==="astro:end"&&(this.lastChild.remove(),e())});c.observe(this,{childList:!0}),document.addEventListener("DOMContentLoaded",e)}}async childrenConnectedCallback(){let e=this.getAttribute("before-hydration-url");e&&await import(e),this.start()}async start(){let e=JSON.parse(this.getAttribute("opts")),c=this.getAttribute("client");if(Astro[c]===void 0){window.addEventListener(`astro:${c}`,()=>this.start(),{once:!0});return}try{await Astro[c](async()=>{let n=this.getAttribute("renderer-url"),[h,{default:p}]=await Promise.all([import(this.getAttribute("component-url")),n?import(n):()=>()=>{}]),u=this.getAttribute("component-export")||"default";if(!u.includes("."))this.Component=h[u];else{this.Component=h;for(let f of u.split("."))this.Component=this.Component[f]}return this.hydrator=p,this.hydrate},e,this)}catch(n){console.error(`[astro-island] Error hydrating ${this.getAttribute("component-url")}`,n)}}attributeChangedCallback(){this.hydrate()}}d(y,"observedAttributes",["props"]),customElements.get("astro-island")||customElements.define("astro-island",y)}})();</script><astro-island uid="Z22jFD6" prefix="v0" component-url="/storagefy/_astro/STRGF_Title.KDvzcBB3.js" component-export="default" renderer-url="/storagefy/_astro/client.DxL-F4FW.js" props="{}" ssr client="visible" opts="{&quot;name&quot;:&quot;STRGF_Title&quot;,&quot;value&quot;:true}" await-children><div id="strf-title" data-v-5dc29489><!--[--><span data-v-5dc29489>S</span><span data-v-5dc29489>T</span><span data-v-5dc29489>O</span><span data-v-5dc29489>R</span><span data-v-5dc29489>A</span><span data-v-5dc29489>G</span><span data-v-5dc29489>E</span><span data-v-5dc29489>F</span><span data-v-5dc29489>Y</span><!--]--></div><!--astro:end--></astro-island> </a> <div style="min-width: 3rem"> <script>(()=>{var e=async t=>{await(await t())()};(self.Astro||(self.Astro={})).only=e;window.dispatchEvent(new Event("astro:only"));})();</script><astro-island uid="1VrJTH" component-url="/storagefy/_astro/STRGF_ThemeButton.D7tAUEY4.js" component-export="default" renderer-url="/storagefy/_astro/client.DxL-F4FW.js" props="{}" ssr client="only" opts="{&quot;name&quot;:&quot;STRGF_ThemeButton&quot;,&quot;value&quot;:true}"></astro-island> </div> </header> <main class="strf-layout"> <aside class="strf-sidebar" id="sidebar"> <nav> <ul class="strf-nav-group"> <li><a href="/storagefy/">Getting Started</a></li> <li><a href="/storagefy/exports-usage">Exports Usage</a></li> <li class="strf-nav-section">Storage</li> <ul> <li> <a href="/storagefy/storage/local-storage">Local Storage Adapter</a> </li> <li> <a href="/storagefy/storage/session-storage">Session Storage Adapter</a> </li> <li><a href="/storagefy/storage/indexeddb">Indexed DB Adapter</a></li> </ul> <li class="strf-nav-section">Store</li> <ul> <li><a href="/storagefy/store/react-store">React Store Adapter</a></li> <li><a href="/storagefy/store/svelte-store">Svelte Store Adapter</a></li> <li><a href="/storagefy/store/vue-store">Vue Store Adapter</a></li> </ul> <li> <a href="https://github.com/arthurgermano/storagefy" target="_blank">
+GitHub
+</a> </li> <li> <a href="https://npmjs.com/package/storagefy" target="_blank">
+NPM
+</a> </li> </ul> </nav> </aside> <section class="strf-main-content"> <button id="menuToggle" class="strf-mobile-toggle">☰</button>  <div class="strf-main-content"> <section class="strf-section"> <h1>Exports Usage</h1> <p>
+Storagefy provides a modular export system for maximum flexibility.
+        Whether you're managing state across React, Vue (Pinia), or Svelte — or
+        choosing between
+<code>localStorage</code>, <code>sessionStorage</code>, or <code>IndexedDB</code> — the exported modules are designed to be highly composable and framework-agnostic.
+</p> </section> <section class="strf-section"> <h2>1. Importing Adapters</h2> <p>
+You can directly import individual storage and framework adapters for
+        advanced use cases or custom integrations.
+</p> <pre class="strf-code-block">        <code>
+import &#123; IndexedDBAdapter &#125; from "storagefy";
+import &#123; LocalStorageAdapter &#125; from "storagefy";
+import &#123; SessionStorageAdapter &#125; from "storagefy";
+
+import &#123; PiniaAdapter &#125; from "storagefy";
+import &#123; ReactAdapter &#125; from "storagefy";
+import &#123; SvelteAdapter &#125; from "storagefy";
+        </code>
+      </pre> </section> <section class="strf-section"> <h2>2. Using <code>startStoragefy</code></h2> <p>
+This function initializes and returns a storage adapter instance based
+        on the provided configuration. You can reuse this adapter across
+        frameworks.
+</p> <pre class="strf-code-block">        <code>
+import &#123; startStoragefy &#125;  from "storagefy";
+const adapter = startStoragefy(&#123;
+  dbName: "my-app",
+  adapter: "indexedDB", // or "localStorage" or "sessionStorage"
+  encrypt: true,
+  expireCheckInterval: 2000,
+  channelName: "storagefy-sync" // sync changes across tabs/windows
+  enableSyncTabs: false, // optional, default false - Whether to enable sync automatically on change key value
+&#125;);
+        </code>
+      </pre> <p>
+If an adapter is already initialized and <code>forceRecreate</code> is not
+        set to
+<code>true</code>, the same instance is reused.
+</p> <p>
+The <code>channelName</code> option creates a communication channel across
+        browser tabs using <code>BroadcastChannel</code>, allowing real-time
+        sync of updates in React, Vue (Pinia), or Svelte stores.
+</p> </section> <section class="strf-section"> <h2>3. Retrieving Current Adapter</h2> <p>
+Once initialized with <code>startStoragefy</code>, you can retrieve the
+        current adapter via:
+</p> <pre class="strf-code-block">        <code>
+import &#123; getStorageAdapter &#125; from "storagefy";          
+const current = getStorageAdapter();
+        </code>
+      </pre> </section> <section class="strf-section"> <h2>4. Framework Adapters</h2> <div class="strf-adapter"> <h3>React</h3> <p>
+To use Storagefy with Zustand, Redux, Jotai, or custom React stores:
+</p> <pre class="strf-code-block">          <code>
+import &#123; getReactAdapter &#125; from "storagefy";
+// startStoragefy() must be called first
+const react = getReactAdapter(&#123;
+  adapterParams: &#123; adapter: "localStorage", dbName: "my-react-app" &#125;
+&#125;);
+    
+await getFromStorage(myStore, "user"); // THIS MUST BE CALLED FIRST THAN setInStorage
+
+await setInStorage(myStore, "user", &#123;
+  timeout: 3600000,
+  ignoreKeys: ["tempId"],
+  syncTabs: true
+&#125;);
+          </code>
+        </pre> <p>Or use the helper:</p> <pre class="strf-code-block">          <code>
+// startStoragefy() must be called first
+await setReactStorage(myStore, "settings", &#123;
+  timeout: 300000, // expire after 5 minutes
+  ignoreKeys: ["_temp", "loading"],
+  syncTabs: true
+&#125;);
+          </code>
+        </pre> </div> <div class="strf-adapter"> <h3>Vue (Pinia)</h3> <p>Get a preconfigured Pinia adapter using:</p> <pre class="strf-code-block">            <code>
+// startStoragefy() must be called first
+const &#123; setInStorage, getFromStorage &#125; = getPiniaAdapter(&#123;
+  adapterParams: &#123; adapter: "sessionStorage" &#125;
+&#125;);
+    
+await getFromStorage(myStore, "user"); // THIS MUST BE CALLED FIRST THAN setInStorage
+await setInStorage(myStore, "user", &#123;
+  timeout: 3600000, // 1 hour
+  ignoreKeys: ["tempId"],
+  syncTabs: true
+&#125;);
+            </code>
+          </pre> <p>Or use the helper:</p> <pre class="strf-code-block">          <code>
+await setPiniaStorage(myStore, "user", &#123;
+  timeout: 3600000,
+  ignoreKeys: ["tempId"],
+  syncTabs: true
+&#125;);
+          </code>
+        </pre> </div> <div class="strf-adapter"> <h3>Svelte</h3> <p>Integrate Svelte writable or readable stores:</p> <pre class="strf-code-block">          <code>
+// startStoragefy() must be called first
+const svelte = getSvelteAdapter(&#123;
+  adapterParams: &#123; 
+    adapter: "indexedDB" 
+  &#125;
+&#125;);
+    
+await getFromStorage(myStore, "theme"); // THIS MUST BE CALLED FIRST THAN setInStorage
+await svelte.setInStorage(myStore, "theme", &#123;
+  timeout: 86400000, // 24 hours
+  ignoreKeys: ["preview"],
+  syncTabs: true
+&#125;);  
+          </code>
+        </pre> <p>Or simply use the shorthand:</p> <pre class="strf-code-block">          <code>
+// startStoragefy() must be called first            
+await setSvelteStorage(myStore, "theme", &#123;
+  timeout: 86400000,
+  ignoreKeys: ["preview"],
+  syncTabs: true
+&#125;);
+          </code>
+        </pre> </div> <p>
+All <code>set*</code> functions accept the same parameters:
+</p> <ul> <li><code>store</code>: The store instance you want to persist</li> <li><code>id</code>: A string key under which to store the data</li> <li> <code>options</code> (optional):
+<ul> <li> <code>timeout</code>: Expiration duration in milliseconds for the
+              stored data
+</li> <li> <code>ignoreKeys</code>: Array of property keys to exclude from
+              persistence
+</li> <li> <code>syncTabs</code>: If <code>true</code>, enables cross-tab
+              syncing using the <code>channelName</code> </li> </ul> </li> </ul> </section> <section class="strf-section"> <h2>5. Exported API Summary</h2> <ul> <li> <code>IndexedDBAdapter</code>, <code>LocalStorageAdapter</code>, <code>SessionStorageAdapter</code> </li> <li> <code>PiniaAdapter</code>, <code>ReactAdapter</code>, <code>SvelteAdapter</code> </li> <li><code>startStoragefy(config)</code></li> <li><code>getStorageAdapter()</code></li> <li> <code>getPiniaAdapter()</code>, <code>getReactAdapter()</code>, <code>getSvelteAdapter()</code> </li> <li> <code>setPiniaStorage()</code>, <code>setReactStorage()</code>, <code>setSvelteStorage()</code> </li> </ul> </section> </div>  </section> </main> <footer class="strf-footer"> <div>
+Developed by
+<br> <a href="https://www.linkedin.com/in/arthurjgermano" target="_blank">
+Arthur José Germano
+</a> </div> <div>MIT License – © 2025</div> </footer> </body></html>

@@ -1,0 +1,1 @@
+import{g as f}from"./generateSimpleId.1pzoLIeQ.js";var r,t;function u(){if(t)return r;t=1;function o(s,e=!0,p=!1){return new Promise((i,n)=>{setTimeout(()=>{p&&n(e===!0?new Error("Sleep Error"):e),i(e)},s)})}return r=o,r}var a=u();const m=f(a);export{m as t};
