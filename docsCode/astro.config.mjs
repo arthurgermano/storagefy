@@ -4,8 +4,8 @@ import svelte from '@astrojs/svelte';
 import vue from '@astrojs/vue';
 
 export default defineConfig({
-  site: 'https://arthurgermano.github.io/storagefy',
-  // base: '/storagefy/',  // Set base path for GitHub Pages
+  site: 'https://arthurgermano.github.io/storagefy/',
+  base: '/storagefy/',  // Set base path for GitHub Pages
   integrations: [
     react(),
     svelte(),

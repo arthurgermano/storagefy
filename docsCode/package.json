@@ -6,8 +6,8 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "generate": "astro build && rm -rf ../docsPages/* && mv ./dist/* ../docsPages",
-    "deploy": "npm run generate && gh-pages -d ../docsPages"
+    "generate": "astro build && rm -rf ../docs/* && mv ./dist/* ../docs",
+    "deploy": "npm run generate && gh-pages -d ../docs"
   },
   "dependencies": {
     "@astrojs/react": "^4.2.3",

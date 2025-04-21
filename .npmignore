@@ -1,0 +1,9 @@
+/tests/
+/keys/
+.gitignore
+CHANGELOG.md
+readme.md
+vitest.config.js
+docs
+docsCode
+src
