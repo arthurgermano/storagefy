@@ -13,10 +13,5 @@ export default defineConfig({
   ],
   vite: {
     base: '/storagefy/',
-    resolve: {
-      alias: {
-        'storagefy': '../dist/storagefy.es.js'
-      }
-    }
   }
 });
