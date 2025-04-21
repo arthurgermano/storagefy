@@ -8,7 +8,7 @@
 
 - 🔌 Plug-and-play storage: IndexedDB, localStorage, or sessionStorage
 - 🧠 Built-in expiration + encryption support
-- 🪄 Works out-of-the-box with **Pinia**, **Redux/Zustand/custom React**, and **Svelte stores**
+- 🪄 Works out-of-the-box with **Pinia**, **Redux/Zustand/Jotai/custom React**, and **Svelte stores**
 - 🪟 Optional multi-tab sync via `BroadcastChannel`
 - 🔁 Easily switch or upgrade your storage backend without touching app logic
 
@@ -90,94 +90,6 @@ const adapter = startStoragefy({
   encrypt: true,
 });
 ```
-
-## 🧩 Framework Adapters
-
-Each adapter uses the same storage backend logic under the hood, with a thin layer for interacting with the store APIs.
-
----
-
-### 📦 `getPiniaAdapter()`
-Provides methods for working with Pinia/Vue stores including getting and setting storage values with optional configuration.
-- `getFromStorage(store, key)`
-- `setInStorage(store, key, options?)`
-
-```ts
-import { getPiniaAdapter } from 'storagefy';
-
-const { getFromStorage, setInStorage } = getPiniaAdapter();
-```
-
-
-### ⚛️ `getReactAdapter()`
-Provides:
-- `getFromStorage(store, key)`
-- `setInStorage(store, key, options?)`
-
-```ts
-import { getReactAdapter } from 'storagefy';
-
-const adapter = getReactAdapter();
-adapter.getFromStorage(store, key);
-adapter.setInStorage(store, key, options);
-```
-
-Supports:
-- `Redux`
-- `Zustand`
-- `Jotai`
-- `Custom`
-
-
-### 🔷 `getSvelteAdapter()`
-Provides:
-- `getFromStorage(store, key)`
-- `setInStorage(store, key, options?)`
-
-```ts
-import { getSvelteAdapter } from 'storagefy';
-
-const adapter = getSvelteAdapter();
-adapter.getFromStorage(store, key);
-adapter.setInStorage(store, key, options);
-```
-
-### 🛠 Utility Setters
-Includes:
-- `setPiniaStorage(store, key)`
-- `setReactStorage(store, key, options)`
-- `setSvelteStorage(store, key)
-
-```ts
-import {
-  setPiniaStorage,
-  setReactStorage,
-  setSvelteStorage
-} from 'storagefy';
-
-await setPiniaStorage(store, 'cart');
-await setReactStorage(store, 'user', { encrypt: true });
-await setSvelteStorage(store, 'session');
-```
-
-### 🚨 Error Handling
-All operations (`getFromStorage`, `setInStorage`, etc.) throw errors if improperly configured. Recommended to wrap in try/catch blocks.
-
-```ts
-try {
-  await setPiniaStorage(myStore, 'settings');
-} catch (e) {
-  console.error('Storage error:', e);
-}
-```
-
-### 📘 API Reference
-Core Storage Methods:
-- `getItem(key)`
-- `setItem(key, value)`
-- `removeItem(key)`
-- `clear()`
-- `keys()`
 
 ### 🔄 Multi-Tab Sync (Optional)
 Enable by configuring `channelName` during initialization. Automatically synchronizes state updates between:
