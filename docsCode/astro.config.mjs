@@ -4,14 +4,16 @@ import svelte from '@astrojs/svelte';
 import vue from '@astrojs/vue';
 
 export default defineConfig({
-  site: 'https://arthurgermano.github.io/storagefy/',
-  base: '/storagefy/',  
+  site: 'https://arthurgermano.github.io',
+  base: '/storagefy',
   integrations: [
     react(),
     svelte(),
     vue()
   ],
-  // vite: {
-  //   base: '/storagefy/',
-  // }
+  outDir: '../docs',
+  build: {
+    assets: '_astro'
+  },
+  trailingSlash: 'always'
 });
