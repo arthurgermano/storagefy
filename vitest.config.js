@@ -12,16 +12,6 @@ export default defineConfig({
     },
     outDir: 'dist',
     rollupOptions: {
-      external: [
-        'react',
-        'pinia',
-        'zustand',
-        'redux',
-        'jotai',
-        'svelte',
-        '@peculiar/webcrypto',
-        'misc-helpers'
-      ],
       output: {
         globals: {
           react: 'React',

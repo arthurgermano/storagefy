@@ -83,10 +83,8 @@ let subtle;
 
 /**
  * Initializes the Web Crypto API depending on environment (Browser or Node).
- * @async
- * @throws Will throw an error if crypto is not available in the environment.
  */
-async function getCrypto() {
+function getCrypto() {
   try {
     logInfo("CryptoHelper - Attempting to initialize crypto engine");
 
@@ -98,10 +96,10 @@ async function getCrypto() {
     }
 
     if (typeof global !== "undefined") {
-      if (globalThis.crypto?.webcrypto) {
-        crypto = globalThis.crypto.webcrypto;
+      if (global.crypto?.webcrypto) {
+        crypto = global.crypto.webcrypto;
         subtle = crypto.subtle;
-        logInfo("CryptoHelper - Crypto initialized from globalThis.webcrypto");
+        logInfo("CryptoHelper - Crypto initialized from global.webcrypto");
         return;
       }
     }
@@ -113,7 +111,11 @@ async function getCrypto() {
   }
 }
 
-await getCrypto();
+try {
+  getCrypto();
+} catch (error) {
+  logError$1("Failed to initialize crypto:", error);
+}
 
 // ------------------------------------------------------------------------------------------------
 
@@ -937,21 +939,26 @@ class IndexedDBAdapter extends StorageAdapter {
       `IndexedDBAdapter - Waiting for database readiness with timeout: ${timeout}ms, tries: ${tries}`
     );
     return new Promise(async (resolve, reject) => {
-      await sleep(timeout);
-      if (this.isReady) {
-        resolve();
-        return true;
+      try {
+        await sleep(timeout);
+        if (this.isReady) {
+          resolve();
+          return true;
+        }
+
+        let attempt = 0;
+        while (!this.isReady && attempt++ < tries) {
+          setTimeout(() => {
+            if (this.isReady) {
+              resolve();
+              return true;
+            }
+          }, timeout);
+        }
+      } catch (error) {
+        return reject(error);
       }
 
-      let attempt = 0;
-      while (!this.isReady && attempt++ < tries) {
-        setTimeout(() => {
-          if (this.isReady) {
-            resolve();
-            return true;
-          }
-        }, timeout);
-      }
       reject(new Error("Database is not ready"));
     });
   }
@@ -2256,26 +2263,30 @@ class PiniaAdapter extends StoreAdapter {
       return;
     }
     this.adapter.onDataChanged(async (data) => {
-      if (data.adapterId == this.adapter.adapterId || !data.origin) {
-        return;
-      }
-      
-      let dataToPatch;
-      if (!data.value) {
-        dataToPatch = await this.adapter.get(data.key);
-      } else {
-        dataToPatch = await this.adapter._decrypt(data.key, data.value);
-      }
+      try {
+        if (data.adapterId == this.adapter.adapterId || !data.origin) {
+          return;
+        }
 
-      if (JSON.stringify(store.$state) === JSON.stringify(dataToPatch)) {
-        return;
+        let dataToPatch;
+        if (!data.value) {
+          dataToPatch = await this.adapter.get(data.key);
+        } else {
+          dataToPatch = await this.adapter._decrypt(data.key, data.value);
+        }
+
+        if (JSON.stringify(store.$state) === JSON.stringify(dataToPatch)) {
+          return;
+        }
+
+        store.$state = {
+          ...store.$state,
+          ...dataToPatch,
+          STORAGEFY_SILENT_CHANNEL_UPDATE: true,
+        };
+      } catch (error) {
+        logError$1("PiniaAdapter - onDataChanged - error:", error);
       }
-      
-      store.$state = {
-        ...store.$state,
-        ...dataToPatch,
-        STORAGEFY_SILENT_CHANNEL_UPDATE: true,
-      };
     });
   }
 
@@ -2791,39 +2802,43 @@ class SvelteAdapter extends StoreAdapter {
    */
   _registerOnDataChanged(store) {
     logInfo("SvelteAdapter - Registering onDataChanged listener");
-    if (!store) {
-      return;
-    }
-    this.adapter.onDataChanged(async (data) => {
-      if (data.adapterId == this.adapter.adapterId || !data.origin) {
+    try {
+      if (!store) {
         return;
       }
+      this.adapter.onDataChanged(async (data) => {
+        if (data.adapterId == this.adapter.adapterId || !data.origin) {
+          return;
+        }
 
-      let currentState;
-      const unsubscribe = store.subscribe((value) => {
-        currentState = assign({}, value);
+        let currentState;
+        const unsubscribe = store.subscribe((value) => {
+          currentState = assign({}, value);
+        });
+        unsubscribe();
+
+        let dataToPatch;
+        if (!data.value) {
+          dataToPatch = await this.adapter.get(data.key);
+        } else {
+          dataToPatch = await this.adapter._decrypt(data.key, data.value);
+        }
+        if (JSON.stringify(currentState) === JSON.stringify(dataToPatch)) {
+          return;
+        }
+
+        // Update store with the patched data
+        // In Svelte, we update the store directly
+        store.update((currentState) => ({
+          ...currentState,
+          ...dataToPatch,
+          STORAGEFY_SILENT_CHANNEL_UPDATE: true,
+        }));
       });
-      unsubscribe();
-
-      let dataToPatch;
-      if (!data.value) {
-        dataToPatch = await this.adapter.get(data.key);
-      } else {
-        dataToPatch = await this.adapter._decrypt(data.key, data.value);
-      }
-      if (JSON.stringify(currentState) === JSON.stringify(dataToPatch)) {
-        return;
-      }
-      console.log("OK");
-
-      // Update store with the patched data
-      // In Svelte, we update the store directly
-      store.update((currentState) => ({
-        ...currentState,
-        ...dataToPatch,
-        STORAGEFY_SILENT_CHANNEL_UPDATE: true,
-      }));
-    });
+    } catch (error) {
+      logError$1("SvelteAdapter - onDataChanged error:", error);
+      throw error;
+    }
   }
 
   // ----------------------------------------------------------------------------------------------

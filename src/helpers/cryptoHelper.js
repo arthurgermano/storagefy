@@ -16,10 +16,8 @@ let subtle;
 
 /**
  * Initializes the Web Crypto API depending on environment (Browser or Node).
- * @async
- * @throws Will throw an error if crypto is not available in the environment.
  */
-async function getCrypto() {
+function getCrypto() {
   try {
     logInfo("CryptoHelper - Attempting to initialize crypto engine");
 
@@ -31,10 +29,10 @@ async function getCrypto() {
     }
 
     if (typeof global !== "undefined") {
-      if (globalThis.crypto?.webcrypto) {
-        crypto = globalThis.crypto.webcrypto;
+      if (global.crypto?.webcrypto) {
+        crypto = global.crypto.webcrypto;
         subtle = crypto.subtle;
-        logInfo("CryptoHelper - Crypto initialized from globalThis.webcrypto");
+        logInfo("CryptoHelper - Crypto initialized from global.webcrypto");
         return;
       }
     }
@@ -47,7 +45,7 @@ async function getCrypto() {
 }
 
 try {
-  await getCrypto();
+  getCrypto();
 } catch (error) {
   logError("Failed to initialize crypto:", error);
 }
