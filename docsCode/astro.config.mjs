@@ -15,7 +15,7 @@ export default defineConfig({
     base: '/storagefy/',
     resolve: {
       alias: {
-        'storagefy': '../docs/storagefy.es.js'
+        'storagefy': '../dist/storagefy.es.js'
       }
     }
   }
