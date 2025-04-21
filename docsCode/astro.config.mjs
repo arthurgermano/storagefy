@@ -11,7 +11,7 @@ export default defineConfig({
     svelte(),
     vue()
   ],
-  vite: {
-    base: '/storagefy/',
-  }
+  // vite: {
+  //   base: '/storagefy/',
+  // }
 });

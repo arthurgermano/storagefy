@@ -22,7 +22,7 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-redux": "^9.2.0",
-    "storagefy": "^0.0.4",
+    "storagefy": "^0.0.6",
     "svelte": "^5.25.12",
     "vue": "^3.5.13",
     "zustand": "^5.0.3"

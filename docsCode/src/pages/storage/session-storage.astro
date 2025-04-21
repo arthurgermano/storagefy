@@ -531,7 +531,15 @@ wizardAdapter.onDataChanged((&#123; key, value &#125;) => &#123;
   // Wait for the DOM to be fully loaded
   document.addEventListener("DOMContentLoaded", async function () {
     try {
-      const anime = await import("../../assets/js/anime.min.js");
+      await new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src =
+          "https://cdn.jsdelivr.net/npm/animejs@4.0.1/lib/anime.iife.min.js";
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+
       const loadAdapter = await import(
         "../../../../src/adapters/SessionStorageAdapter.js"
       );
@@ -674,7 +682,7 @@ wizardAdapter.onDataChanged((&#123; key, value &#125;) => &#123;
 
       demoAdapter.onDataChanged(async (data) => {
         try {
-          if (data.origin === "reset") { 
+          if (data.origin === "reset") {
             await demoAdapter.clear();
             updateStorageDisplay();
             return;

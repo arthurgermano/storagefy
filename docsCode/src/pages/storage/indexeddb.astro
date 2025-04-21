@@ -146,8 +146,7 @@ const adapter = new IndexedDBAdapter(&#123;
             <b>wait the animation to finish before go to another tab!</b>
           </div>
           <div class="controls">
-            <button id="toggle-cycle" class="strf-button"
-              >Toggle Weather</button
+            <button id="toggle-cycle" class="strf-button">Toggle Weather</button
             >
             <button id="reset-cycle" class="strf-button">Reset</button>
             <button id="toggle-encrypt" class="strf-button"
@@ -634,7 +633,15 @@ async function logout() &#123;
     // Wait for the DOM to be fully loaded
     document.addEventListener("DOMContentLoaded", async function () {
       try {
-        const anime = await import("../../assets/js/anime.min.js");
+        await new Promise((resolve, reject) => {
+          const script = document.createElement("script");
+          script.src =
+            "https://cdn.jsdelivr.net/npm/animejs@4.0.1/lib/anime.iife.min.js";
+          script.onload = resolve;
+          script.onerror = reject;
+          document.head.appendChild(script);
+        });
+
         const loadAdapter = await import(
           "../../../../src/adapters/IndexedDBAdapter.js"
         );
@@ -830,7 +837,7 @@ async function logout() &#123;
 
     .sky {
       height: 300px;
-      background-color: #87CEEB; /* Sky blue */
+      background-color: #87ceeb; /* Sky blue */
       border-radius: 8px 8px 0 0;
       position: relative;
       overflow: hidden;
@@ -840,13 +847,13 @@ async function logout() &#123;
     .sun {
       width: 80px;
       height: 80px;
-      background: #FFD700;
+      background: #ffd700;
       border-radius: 50%;
       position: absolute;
       top: 50px;
       left: 50%;
       transform: translateX(-50%);
-      box-shadow: 0 0 40px #FFD700;
+      box-shadow: 0 0 40px #ffd700;
       opacity: 1;
       transition: opacity 0.5s;
     }
@@ -854,7 +861,7 @@ async function logout() &#123;
     .cloud {
       width: 120px;
       height: 40px;
-      background: #FFFFFF;
+      background: #ffffff;
       border-radius: 40px;
       position: absolute;
       top: 80px;
@@ -868,7 +875,7 @@ async function logout() &#123;
       content: "";
       width: 50px;
       height: 50px;
-      background: #FFFFFF;
+      background: #ffffff;
       border-radius: 50%;
       position: absolute;
       top: -25px;
@@ -879,7 +886,7 @@ async function logout() &#123;
       content: "";
       width: 30px;
       height: 30px;
-      background: #FFFFFF;
+      background: #ffffff;
       border-radius: 50%;
       position: absolute;
       top: -15px;
@@ -893,7 +900,7 @@ async function logout() &#123;
       opacity: 0;
       transition: opacity 0.5s;
       left: 7.5rem;
-      top: 4rem; 
+      top: 4rem;
     }
 
     .raindrops:before {
@@ -901,7 +908,7 @@ async function logout() &#123;
       position: absolute;
       width: 2px;
       height: 10px;
-      background: #A5C8E4;
+      background: #a5c8e4;
       top: 50px;
       left: 25%;
       animation: rain 1s linear infinite;
@@ -912,7 +919,7 @@ async function logout() &#123;
       position: absolute;
       width: 2px;
       height: 10px;
-      background: #A5C8E4;
+      background: #a5c8e4;
       top: 30px;
       left: 35%;
       animation: rain 1s linear infinite 0.3s;

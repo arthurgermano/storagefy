@@ -1,4 +1,4 @@
-import * as Storagefy from "../../../dist/index.mjs";
+import * as Storagefy from "storagefy";
 
 const storageAdapter = new Storagefy.startStoragefy({
   dbName: "storagefy",
