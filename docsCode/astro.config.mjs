@@ -5,16 +5,17 @@ import vue from '@astrojs/vue';
 
 export default defineConfig({
   site: 'https://arthurgermano.github.io/storagefy/',
-  base: '/storagefy/',  // Set base path for GitHub Pages
+  base: '/storagefy/',  
   integrations: [
     react(),
     svelte(),
     vue()
   ],
   vite: {
+    base: '/storagefy/',
     resolve: {
       alias: {
-        'storagefy': '../dist/storagefy.es.js'
+        'storagefy': '../docs/storagefy.es.js'
       }
     }
   }
