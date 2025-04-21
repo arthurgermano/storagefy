@@ -1,0 +1,307 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><link rel="icon" type="image/svg+xml" href="/favicon.svg"><meta name="generator" content="Astro v5.6.1"><title>Storagefy | Frontend Storage Adapter</title><!-- Fonts --><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet"><!-- Meta tags --><meta name="description" content="Frontend storage adapter with framework integrations for IndexedDB, LocalStorage, and SessionStorage as well stores like Pinia, Svelte and React"><meta property="og:title" content="Storagefy"><meta property="og:description" content="Cross-framework storage solution for modern web applications"><meta property="og:type" content="website"><meta property="og:url" content="https://arthurgermano.github.com/storagefy"><script>
+      (() => {
+        try {
+          const raw = localStorage.getItem("storagefy__Storagefy_App");
+          const parsed = JSON.parse(raw || "{}");
+          const mode = parsed?.mode;
+
+          // Delay to ensure body is available
+          requestAnimationFrame(() => {
+            if (!document.body) return;
+
+            if (mode === "dark") {
+              document.body.classList.add("dark");
+            } else {
+              document.body.classList.remove("dark");
+            }
+          });
+        } catch (err) {
+          console.error("Failed to load theme mode from storage:", err);
+        }
+      })();
+    </script><link rel="stylesheet" href="/_astro/exports-usage.BQxDOPS-.css">
+<style>.strf-comparison-table[data-astro-cid-qde7petx]{width:100%;border-collapse:collapse;margin-top:20px;text-align:center}.strf-demo[data-astro-cid-qde7petx]{margin:2rem 0;background:#f8f9fa;border-radius:8px;padding:1.5rem;box-shadow:0 2px 10px #0000000d}.day-night-demo[data-astro-cid-qde7petx]{width:100%;max-width:600px;margin:0 auto}.sky[data-astro-cid-qde7petx]{height:300px;background-color:#87ceeb;border-radius:8px 8px 0 0;position:relative;overflow:hidden;transition:background-color .5s}.sun[data-astro-cid-qde7petx]{width:80px;height:80px;background:gold;border-radius:50%;position:absolute;top:50px;left:50%;transform:translate(-50%);box-shadow:0 0 40px gold;opacity:1;transition:opacity .5s}.cloud[data-astro-cid-qde7petx]{width:120px;height:40px;background:#fff;border-radius:40px;position:absolute;top:80px;left:50%;transform:translate(-50%);opacity:0;transition:opacity .5s}.cloud[data-astro-cid-qde7petx]:before{content:"";width:50px;height:50px;background:#fff;border-radius:50%;position:absolute;top:-25px;left:20px}.cloud[data-astro-cid-qde7petx]:after{content:"";width:30px;height:30px;background:#fff;border-radius:50%;position:absolute;top:-15px;right:20px}.raindrops[data-astro-cid-qde7petx]{position:absolute;width:100%;height:100%;opacity:0;transition:opacity .5s;left:7.5rem;top:4rem}.raindrops[data-astro-cid-qde7petx]:before{content:"";position:absolute;width:2px;height:10px;background:#a5c8e4;top:50px;left:25%;animation:rain 1s linear infinite}.raindrops[data-astro-cid-qde7petx]:after{content:"";position:absolute;width:2px;height:10px;background:#a5c8e4;top:30px;left:35%;animation:rain 1s linear infinite .3s}@keyframes rain{0%{transform:translateY(0)}to{transform:translateY(200px)}}.ground[data-astro-cid-qde7petx]{height:100px;background:linear-gradient(to bottom,#5d8b5a,#3b5e48);border-radius:0 0 8px 8px}.controls[data-astro-cid-qde7petx]{display:flex;gap:10px;margin-top:20px;justify-content:center}.strf-button[data-astro-cid-qde7petx]{background-color:#703ad5;color:#fff;border:none;padding:10px 15px;border-radius:4px;cursor:pointer;font-weight:600;transition:background-color .2s}.strf-button[data-astro-cid-qde7petx]:hover{background-color:#2c5ea3}.storage-debug[data-astro-cid-qde7petx]{margin-top:20px;padding:15px;background:#f1f1f1;border-radius:4px;font-size:14px}.storage-debug[data-astro-cid-qde7petx] h4[data-astro-cid-qde7petx]{margin-top:0;margin-bottom:10px;color:#333}#storage-content[data-astro-cid-qde7petx]{background:#fff;color:#000;padding:10px;border-radius:4px;max-height:100px;overflow-y:auto;font-family:monospace;white-space:pre-wrap;word-break:break-all;font-size:12px}.sun[data-astro-cid-qde7petx],.cloud[data-astro-cid-qde7petx],.raindrops[data-astro-cid-qde7petx],.sky[data-astro-cid-qde7petx]{will-change:transform,opacity,background-color}
+</style></head> <body class=""> <header class="strf-header"> <span></span> <a href="/" class="strf-logo" style="margin-left: -1rem"> <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"> <path d="M12 2C17 2 21 3.79 21 6V18C21 20.21 17 22 12 22C7 22 3 20.21 3 18V6C3 3.79 7 2 12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M21 6C21 8.21 17 10 12 10C7 10 3 8.21 3 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M21 12C21 14.21 17 16 12 16C7 16 3 14.21 3 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path> </svg> <style>astro-island,astro-slot,astro-static-slot{display:contents}</style><script>(()=>{var a=(s,i,o)=>{let r=async()=>{await(await s())()},t=typeof i.value=="object"?i.value:void 0,c={rootMargin:t==null?void 0:t.rootMargin},n=new IntersectionObserver(e=>{for(let l of e)if(l.isIntersecting){n.disconnect(),r();break}},c);for(let e of o.children)n.observe(e)};(self.Astro||(self.Astro={})).visible=a;window.dispatchEvent(new Event("astro:visible"));})();;(()=>{var A=Object.defineProperty;var g=(i,o,a)=>o in i?A(i,o,{enumerable:!0,configurable:!0,writable:!0,value:a}):i[o]=a;var d=(i,o,a)=>g(i,typeof o!="symbol"?o+"":o,a);{let i={0:t=>m(t),1:t=>a(t),2:t=>new RegExp(t),3:t=>new Date(t),4:t=>new Map(a(t)),5:t=>new Set(a(t)),6:t=>BigInt(t),7:t=>new URL(t),8:t=>new Uint8Array(t),9:t=>new Uint16Array(t),10:t=>new Uint32Array(t),11:t=>1/0*t},o=t=>{let[l,e]=t;return l in i?i[l](e):void 0},a=t=>t.map(o),m=t=>typeof t!="object"||t===null?t:Object.fromEntries(Object.entries(t).map(([l,e])=>[l,o(e)]));class y extends HTMLElement{constructor(){super(...arguments);d(this,"Component");d(this,"hydrator");d(this,"hydrate",async()=>{var b;if(!this.hydrator||!this.isConnected)return;let e=(b=this.parentElement)==null?void 0:b.closest("astro-island[ssr]");if(e){e.addEventListener("astro:hydrate",this.hydrate,{once:!0});return}let c=this.querySelectorAll("astro-slot"),n={},h=this.querySelectorAll("template[data-astro-template]");for(let r of h){let s=r.closest(this.tagName);s!=null&&s.isSameNode(this)&&(n[r.getAttribute("data-astro-template")||"default"]=r.innerHTML,r.remove())}for(let r of c){let s=r.closest(this.tagName);s!=null&&s.isSameNode(this)&&(n[r.getAttribute("name")||"default"]=r.innerHTML)}let p;try{p=this.hasAttribute("props")?m(JSON.parse(this.getAttribute("props"))):{}}catch(r){let s=this.getAttribute("component-url")||"<unknown>",v=this.getAttribute("component-export");throw v&&(s+=` (export ${v})`),console.error(`[hydrate] Error parsing props for component ${s}`,this.getAttribute("props"),r),r}let u;await this.hydrator(this)(this.Component,p,n,{client:this.getAttribute("client")}),this.removeAttribute("ssr"),this.dispatchEvent(new CustomEvent("astro:hydrate"))});d(this,"unmount",()=>{this.isConnected||this.dispatchEvent(new CustomEvent("astro:unmount"))})}disconnectedCallback(){document.removeEventListener("astro:after-swap",this.unmount),document.addEventListener("astro:after-swap",this.unmount,{once:!0})}connectedCallback(){if(!this.hasAttribute("await-children")||document.readyState==="interactive"||document.readyState==="complete")this.childrenConnectedCallback();else{let e=()=>{document.removeEventListener("DOMContentLoaded",e),c.disconnect(),this.childrenConnectedCallback()},c=new MutationObserver(()=>{var n;((n=this.lastChild)==null?void 0:n.nodeType)===Node.COMMENT_NODE&&this.lastChild.nodeValue==="astro:end"&&(this.lastChild.remove(),e())});c.observe(this,{childList:!0}),document.addEventListener("DOMContentLoaded",e)}}async childrenConnectedCallback(){let e=this.getAttribute("before-hydration-url");e&&await import(e),this.start()}async start(){let e=JSON.parse(this.getAttribute("opts")),c=this.getAttribute("client");if(Astro[c]===void 0){window.addEventListener(`astro:${c}`,()=>this.start(),{once:!0});return}try{await Astro[c](async()=>{let n=this.getAttribute("renderer-url"),[h,{default:p}]=await Promise.all([import(this.getAttribute("component-url")),n?import(n):()=>()=>{}]),u=this.getAttribute("component-export")||"default";if(!u.includes("."))this.Component=h[u];else{this.Component=h;for(let f of u.split("."))this.Component=this.Component[f]}return this.hydrator=p,this.hydrate},e,this)}catch(n){console.error(`[astro-island] Error hydrating ${this.getAttribute("component-url")}`,n)}}attributeChangedCallback(){this.hydrate()}}d(y,"observedAttributes",["props"]),customElements.get("astro-island")||customElements.define("astro-island",y)}})();</script><astro-island uid="9uAr1" prefix="v0" component-url="/_astro/STRGF_Title.KDvzcBB3.js" component-export="default" renderer-url="/_astro/client.DxL-F4FW.js" props="{}" ssr client="visible" opts="{&quot;name&quot;:&quot;STRGF_Title&quot;,&quot;value&quot;:true}" await-children><div id="strf-title" data-v-5dc29489><!--[--><span data-v-5dc29489>S</span><span data-v-5dc29489>T</span><span data-v-5dc29489>O</span><span data-v-5dc29489>R</span><span data-v-5dc29489>A</span><span data-v-5dc29489>G</span><span data-v-5dc29489>E</span><span data-v-5dc29489>F</span><span data-v-5dc29489>Y</span><!--]--></div><!--astro:end--></astro-island> </a> <div style="min-width: 3rem"> <script>(()=>{var e=async t=>{await(await t())()};(self.Astro||(self.Astro={})).only=e;window.dispatchEvent(new Event("astro:only"));})();</script><astro-island uid="1fPeOB" component-url="/_astro/STRGF_ThemeButton.D7tAUEY4.js" component-export="default" renderer-url="/_astro/client.DxL-F4FW.js" props="{}" ssr client="only" opts="{&quot;name&quot;:&quot;STRGF_ThemeButton&quot;,&quot;value&quot;:true}"></astro-island> </div> </header> <main class="strf-layout"> <aside class="strf-sidebar" id="sidebar"> <nav> <ul class="strf-nav-group"> <li><a href="/storagefy/">Getting Started</a></li> <li><a href="/storagefy/exports-usage">Exports Usage</a></li> <li class="strf-nav-section">Storage</li> <ul> <li> <a href="/storagefy/storage/local-storage">Local Storage Adapter</a> </li> <li> <a href="/storagefy/storage/session-storage">Session Storage Adapter</a> </li> <li><a href="/storagefy/storage/indexeddb">Indexed DB Adapter</a></li> </ul> <li class="strf-nav-section">Store</li> <ul> <li><a href="/storagefy/store/react-store">React Store Adapter</a></li> <li><a href="/storagefy/store/svelte-store">Svelte Store Adapter</a></li> <li><a href="/storagefy/store/vue-store">Vue Store Adapter</a></li> </ul> <li> <a href="https://github.com/arthurgermano/storagefy" target="_blank">
+GitHub
+</a> </li> <li> <a href="https://npmjs.com/package/storagefy" target="_blank">
+NPM
+</a> </li> </ul> </nav> </aside> <section class="strf-main-content"> <button id="menuToggle" class="strf-mobile-toggle">☰</button>  <div class="strf-main-content" data-astro-cid-qde7petx> <section class="strf-section" data-astro-cid-qde7petx> <h1 data-astro-cid-qde7petx>IndexedDB Storage Adapter</h1> <p data-astro-cid-qde7petx>
+The <code data-astro-cid-qde7petx>IndexedDBAdapter</code> extends the abstract
+<code data-astro-cid-qde7petx>StorageAdapter</code>
+class, providing a concrete implementation for persisting data to the browser's
+<code data-astro-cid-qde7petx>IndexedDB</code>. This adapter offers persistent, high-capacity
+        client-side storage with enhanced capabilities including encryption,
+        expiration management, metadata tracking, and optional cross-tab
+        synchronization.
+</p> </section> <section class="strf-section" data-astro-cid-qde7petx> <h2 data-astro-cid-qde7petx>1. Getting Started</h2> <p data-astro-cid-qde7petx>Initialize the adapter with the desired options:</p> <pre class="strf-code-block" data-astro-cid-qde7petx>        <code data-astro-cid-qde7petx>
+import IndexedDBAdapter from "storagefy";
+
+const adapter = new IndexedDBAdapter(&#123;
+  dbName: "my-app",               // required - database name
+  storeName: "my-store",          // optional - defaults to `$&#123;dbName&#125;_store`
+  encrypt: true,                  // optional, default false
+  version: 1,                     // optional, default 1
+  expireCheckInterval: 2000,      // optional, default 1000ms
+  description: "App database",    // optional
+  channelName: "idb-channel"      // optional - used for sync between tabs
+  enableSyncTabs: false,          // optional, default false - Whether to enable sync 
+                                  // automatically on change key value
+&#125;);
+        </code>
+      </pre> <p data-astro-cid-qde7petx>
+The <code data-astro-cid-qde7petx>channelName</code> enables automatic synchronization of data across
+        open tabs using the <code data-astro-cid-qde7petx>CrossTabChannel</code> communication system. This
+        is particularly useful for applications where you want to maintain state
+        consistency across multiple tabs.
+</p> </section> <section class="strf-section" data-astro-cid-qde7petx> <h2 data-astro-cid-qde7petx>2. Core Concepts</h2> <div class="strf-concept" data-astro-cid-qde7petx> <h3 data-astro-cid-qde7petx>Persistent Storage</h3> <p data-astro-cid-qde7petx>
+IndexedDB provides a robust, persistent storage mechanism that can
+          handle significant amounts of structured data. Unlike localStorage or
+          sessionStorage, IndexedDB can store much larger data volumes
+          (typically limited only by disk space) and supports complex data
+          structures.
+</p> </div> <div class="strf-concept" data-astro-cid-qde7petx> <h3 data-astro-cid-qde7petx>Database Organization</h3> <p data-astro-cid-qde7petx>
+Data is stored in an object store within the IndexedDB database. Each
+          adapter instance creates or uses a database with the specified
+<code data-astro-cid-qde7petx>dbName</code> and an object store (default name is
+<code data-astro-cid-qde7petx>&#123;dbName&#125;_store</code>). All keys are automatically
+          namespaced using the format
+<code data-astro-cid-qde7petx>&#123;dbName&#125;__</code>
+to maintain organization.
+</p> </div> <div class="strf-concept" data-astro-cid-qde7petx> <h3 data-astro-cid-qde7petx>Encryption</h3> <p data-astro-cid-qde7petx>
+When the <code data-astro-cid-qde7petx>encrypt: true</code> option is set, all values are encrypted
+          before storage and decrypted when retrieved. Keys are also obfuscated to
+          enhance security, providing an additional layer of protection for sensitive
+          data.
+</p> </div> <div class="strf-concept" data-astro-cid-qde7petx> <h3 data-astro-cid-qde7petx>Asynchronous Operations</h3> <p data-astro-cid-qde7petx>
+All IndexedDB operations are inherently asynchronous. The adapter
+          handles this complexity internally, providing a clean Promise-based
+          API for all operations that makes asynchronous storage operations
+          straightforward to work with.
+</p> </div> <div class="strf-concept" data-astro-cid-qde7petx> <h3 data-astro-cid-qde7petx>Cross-Tab Communication</h3> <p data-astro-cid-qde7petx>
+When a <code data-astro-cid-qde7petx>channelName</code> is provided, changes to data are broadcast
+          across browser tabs. This enables real-time synchronization of state across
+          multiple open instances of your application.
+</p> </div> <div class="strf-concept" data-astro-cid-qde7petx> <h3 data-astro-cid-qde7petx>Expiration Management</h3> <p data-astro-cid-qde7petx>
+The adapter includes a built-in expiration system that automatically
+          removes expired items at regular intervals (configurable via
+<code data-astro-cid-qde7petx>expireCheckInterval</code>). This helps manage temporary data
+          without manual cleanup while maintaining long-term data integrity.
+</p> </div> <div class="strf-concept" data-astro-cid-qde7petx> <h3 data-astro-cid-qde7petx>Database Versioning</h3> <p data-astro-cid-qde7petx>
+IndexedDB supports versioning to manage schema changes over time. The
+          adapter handles version upgrades automatically when you specify a new
+          version number, ensuring backward compatibility with previously stored
+          data.
+</p> </div> </section> <section class="strf-section" data-astro-cid-qde7petx> <h2 data-astro-cid-qde7petx>3. Test It</h2> <div class="strf-demo" data-astro-cid-qde7petx> <div class="day-night-demo" data-astro-cid-qde7petx> <div class="sky" data-astro-cid-qde7petx> <div class="sun" data-astro-cid-qde7petx></div> <div class="cloud" data-astro-cid-qde7petx></div> <div class="raindrops" data-astro-cid-qde7petx></div> </div> <div class="ground" data-astro-cid-qde7petx></div> <div style="text-align: center;" data-astro-cid-qde7petx> <small data-astro-cid-qde7petx> <i data-astro-cid-qde7petx> <a href="/storage/indexeddb" target="_blank" data-astro-cid-qde7petx>Open a new tab in this page, when the animation ends it
+                  should update the another tab as well</a> </i> </small> <br data-astro-cid-qde7petx> <b data-astro-cid-qde7petx>wait the animation to finish before go to another tab!</b> </div> <div class="controls" data-astro-cid-qde7petx> <button id="toggle-cycle" class="strf-button" data-astro-cid-qde7petx>Toggle Weather</button> <button id="reset-cycle" class="strf-button" data-astro-cid-qde7petx>Reset</button> <button id="toggle-encrypt" class="strf-button" data-astro-cid-qde7petx>Turn Encryption ON</button> </div> <div class="storage-debug" data-astro-cid-qde7petx> <h4 data-astro-cid-qde7petx>IndexedDB Content:</h4> <pre id="storage-content" data-astro-cid-qde7petx></pre> </div> </div> </div> </section> <section class="strf-section" data-astro-cid-qde7petx> <h2 data-astro-cid-qde7petx>4. API Reference</h2> <div class="strf-api-method" data-astro-cid-qde7petx> <h3 data-astro-cid-qde7petx> <code data-astro-cid-qde7petx>await adapter.get(key)</code> </h3> <p data-astro-cid-qde7petx>
+Retrieves a value. Returns <code data-astro-cid-qde7petx>null</code> if not found or expired. Handles
+          decryption automatically if encryption is enabled.
+</p> <pre class="strf-code-block" data-astro-cid-qde7petx>          <code data-astro-cid-qde7petx>
+await adapter.set("userId", "user123");
+const value = await adapter.get("userId"); // "user123"
+          </code>
+        </pre> </div> <div class="strf-api-method" data-astro-cid-qde7petx> <h3 data-astro-cid-qde7petx> <code data-astro-cid-qde7petx>await adapter.set(key, value, expire?)</code> </h3> <p data-astro-cid-qde7petx>
+Stores a value. Optional <code data-astro-cid-qde7petx>expire</code> is in milliseconds from now.
+          Handles encryption automatically if enabled and broadcasts changes to other
+          tabs if using a channel.
+</p> <pre class="strf-code-block" data-astro-cid-qde7petx>          <code data-astro-cid-qde7petx>
+// Save user data that expires in 7 days
+await adapter.set("userData", userData, 7 * 24 * 60 * 60 * 1000);
+          </code>
+        </pre> </div> <div class="strf-api-method" data-astro-cid-qde7petx> <h3 data-astro-cid-qde7petx> <code data-astro-cid-qde7petx>await adapter.delete(key)</code> </h3> <p data-astro-cid-qde7petx>
+Removes a key and its expiration metadata. Also broadcasts deletion to
+          other tabs if using a channel.
+</p> <pre class="strf-code-block" data-astro-cid-qde7petx>          <code data-astro-cid-qde7petx>await adapter.delete("userId");</code>
+        </pre> </div> <div class="strf-api-method" data-astro-cid-qde7petx> <h3 data-astro-cid-qde7petx> <code data-astro-cid-qde7petx>await adapter.list(prefix?)</code> </h3> <p data-astro-cid-qde7petx>
+Returns all keys/values matching the prefix (defaults to all in
+          namespace). Decrypts values if encryption is enabled.
+</p> <pre class="strf-code-block" data-astro-cid-qde7petx>          <code data-astro-cid-qde7petx>
+await adapter.set("user.name", "John");
+await adapter.set("user.email", "john@example.com");
+const userData = await adapter.list("user."); 
+// [&#123; key: "user.name", value: "John" &#125;, &#123; key: "user.email", value: "john@example.com" &#125;]
+          </code>
+        </pre> </div> <div class="strf-api-method" data-astro-cid-qde7petx> <h3 data-astro-cid-qde7petx> <code data-astro-cid-qde7petx>await adapter.has(key)</code> </h3> <p data-astro-cid-qde7petx>
+Returns <code data-astro-cid-qde7petx>true</code> if the key exists in the IndexedDB store and
+          has not expired.
+</p> <pre class="strf-code-block" data-astro-cid-qde7petx><code data-astro-cid-qde7petx>await adapter.has("userId"); // true or false</code></pre> </div> <div class="strf-api-method" data-astro-cid-qde7petx> <h3 data-astro-cid-qde7petx> <code data-astro-cid-qde7petx>await adapter.clear()</code> </h3> <p data-astro-cid-qde7petx>
+Clears all data, including metadata and expirations, within this
+          adapter's namespace.
+</p> <pre class="strf-code-block" data-astro-cid-qde7petx><code data-astro-cid-qde7petx>await adapter.clear();</code></pre> </div> <div class="strf-api-method" data-astro-cid-qde7petx> <h3 data-astro-cid-qde7petx> <code data-astro-cid-qde7petx>await adapter.reset()</code> </h3> <p data-astro-cid-qde7petx>
+Removes only data keys related to the namespace, not metadata. Useful
+          for clearing user data while preserving system configuration.
+</p> <pre class="strf-code-block" data-astro-cid-qde7petx><code data-astro-cid-qde7petx>await adapter.reset();</code></pre> </div> <div class="strf-api-method" data-astro-cid-qde7petx> <h3 data-astro-cid-qde7petx> <code data-astro-cid-qde7petx>await adapter.setExpire(key, timestamp)</code> </h3> <p data-astro-cid-qde7petx>
+Set a custom expiration time (timestamp in ms) for a specific key.
+</p> <pre class="strf-code-block" data-astro-cid-qde7petx>          <code data-astro-cid-qde7petx>
+const futureDate = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days
+await adapter.setExpire("userData", futureDate);
+          </code>
+        </pre> </div> <div class="strf-api-method" data-astro-cid-qde7petx> <h3 data-astro-cid-qde7petx> <code data-astro-cid-qde7petx>await adapter.getExpire(key)</code> </h3> <p data-astro-cid-qde7petx>
+Returns the expiration timestamp for a key, or <code data-astro-cid-qde7petx>null</code> if no
+          expiration is set.
+</p> <pre class="strf-code-block" data-astro-cid-qde7petx>          <code data-astro-cid-qde7petx>
+const expireTime = await adapter.getExpire("userData");
+// Returns timestamp or null
+          </code>
+        </pre> </div> <div class="strf-api-method" data-astro-cid-qde7petx> <h3 data-astro-cid-qde7petx> <code data-astro-cid-qde7petx>await adapter.deleteExpire(key)</code> </h3> <p data-astro-cid-qde7petx>
+Removes the expiration for the given key, making it persist
+          indefinitely.
+</p> <pre class="strf-code-block" data-astro-cid-qde7petx>          <code data-astro-cid-qde7petx>
+await adapter.deleteExpire("userData");
+          </code>
+        </pre> </div> <div class="strf-api-method" data-astro-cid-qde7petx> <h3 data-astro-cid-qde7petx> <code data-astro-cid-qde7petx>await adapter.clearExpire()</code> </h3> <p data-astro-cid-qde7petx>Deletes all keys that have expired based on their timestamps.</p> <pre class="strf-code-block" data-astro-cid-qde7petx>          <code data-astro-cid-qde7petx>
+await adapter.clearExpire();
+          </code>
+        </pre> </div> <div class="strf-api-method" data-astro-cid-qde7petx> <h3 data-astro-cid-qde7petx> <code data-astro-cid-qde7petx>await adapter.waitReadiness(timeout?, tries?)</code> </h3> <p data-astro-cid-qde7petx>
+Waits for the IndexedDB to be ready before proceeding. Useful when
+          executing operations immediately after initialization.
+</p> <pre class="strf-code-block" data-astro-cid-qde7petx>          <code data-astro-cid-qde7petx>
+await adapter.waitReadiness();
+// Now safe to perform operations
+          </code>
+        </pre> </div> <div class="strf-api-method" data-astro-cid-qde7petx> <h3 data-astro-cid-qde7petx> <code data-astro-cid-qde7petx>adapter.destroy()</code> </h3> <p data-astro-cid-qde7petx>
+Cleans up resources, stops the expiration timer, and removes event
+          listeners. Called automatically on page unload.
+</p> <pre class="strf-code-block" data-astro-cid-qde7petx>          <code data-astro-cid-qde7petx>
+adapter.destroy(); // Clean up before component unmount
+          </code>
+        </pre> </div> <div class="strf-api-method" data-astro-cid-qde7petx> <h3 data-astro-cid-qde7petx> <code data-astro-cid-qde7petx>adapter.emitDataChange(key, value, origin)</code> </h3> <p data-astro-cid-qde7petx>
+Explicitly broadcasts a data change event to other tabs (usually
+          called automatically by set/delete).
+</p> <pre class="strf-code-block" data-astro-cid-qde7petx>          <code data-astro-cid-qde7petx>
+adapter.emitDataChange("appState", newState, "tab-123");
+          </code>
+        </pre> </div> <div class="strf-api-method" data-astro-cid-qde7petx> <h3 data-astro-cid-qde7petx> <code data-astro-cid-qde7petx>adapter.onDataChanged(callback)</code> </h3> <p data-astro-cid-qde7petx>
+Registers a callback function to handle data changes from other tabs
+          or contexts.
+</p> <pre class="strf-code-block" data-astro-cid-qde7petx>          <code data-astro-cid-qde7petx>
+adapter.onDataChanged((&#123; key, value, origin &#125;) => &#123;
+  console.log(`Data for $&#123;key&#125; changed in tab $&#123;origin&#125;`);
+  // Update UI or app state accordingly
+&#125;);
+          </code>
+        </pre> </div> </section> <section class="strf-section" data-astro-cid-qde7petx> <h2 data-astro-cid-qde7petx>5. Advanced Usage</h2> <div class="strf-advanced" data-astro-cid-qde7petx> <h3 data-astro-cid-qde7petx>Offline-First Application Data</h3> <p data-astro-cid-qde7petx>The adapter is ideal for managing offline-first application data:</p> <pre class="strf-code-block" data-astro-cid-qde7petx>          <code data-astro-cid-qde7petx>
+// Store application data for offline use
+async function cacheApplicationData(data) &#123;
+  await adapter.set("app.cache", data);
+  await adapter.set("app.lastSyncTime", Date.now());
+&#125;
+
+// Retrieve cached data when offline
+async function getOfflineData() &#123;
+  return await adapter.get("app.cache");
+&#125;
+
+// Check if cache needs refreshing (older than 1 day)
+async function shouldRefreshCache() &#123;
+  const lastSync = await adapter.get("app.lastSyncTime");
+  if (!lastSync) return true;
+  const oneDay = 24 * 60 * 60 * 1000;
+  return (Date.now() - lastSync) > oneDay;
+&#125;
+          </code>
+        </pre> </div> <div class="strf-advanced" data-astro-cid-qde7petx> <h3 data-astro-cid-qde7petx>User Preferences Management</h3> <p data-astro-cid-qde7petx>Managing persistent user preferences:</p> <pre class="strf-code-block" data-astro-cid-qde7petx>          <code data-astro-cid-qde7petx>
+// Store user preferences
+async function saveUserPreferences(preferences) &#123;
+  await adapter.set("preferences", preferences);
+&#125;
+
+// Load user preferences
+async function loadUserPreferences() &#123;
+  return await adapter.get("preferences") || getDefaultPreferences();
+&#125;
+
+// Update a single preference
+async function updatePreference(key, value) &#123;
+  const prefs = await loadUserPreferences();
+  prefs[key] = value;
+  await saveUserPreferences(prefs);
+&#125;
+          </code>
+        </pre> </div> <div class="strf-advanced" data-astro-cid-qde7petx> <h3 data-astro-cid-qde7petx>Complex Data Structures with Prefixes</h3> <p data-astro-cid-qde7petx>Managing related data using key prefixes:</p> <pre class="strf-code-block" data-astro-cid-qde7petx>          <code data-astro-cid-qde7petx>
+// Store product data
+async function saveProduct(product) &#123;
+  await adapter.set(`product.$&#123;product.id&#125;`, product);
+&#125;
+
+// Add product to favorites
+async function addToFavorites(productId) &#123;
+  await adapter.set(`favorite.$&#123;productId&#125;`, true);
+&#125;
+
+// Get all favorite products
+async function getFavoriteProducts() &#123;
+  const favorites = await adapter.list("favorite.");
+  const productIds = favorites.map(f => f.key.replace("favorite.", ""));
+  
+  const products = [];
+  for (const id of productIds) &#123;
+    const product = await adapter.get(`product.$&#123;id&#125;`);
+    if (product) products.push(product);
+  &#125;
+  
+  return products;
+&#125;
+          </code>
+        </pre> </div> <div class="strf-advanced" data-astro-cid-qde7petx> <h3 data-astro-cid-qde7petx>IndexedDB with Encryption for Sensitive Data</h3> <p data-astro-cid-qde7petx>Secure storage of sensitive user information:</p> <pre class="strf-code-block" data-astro-cid-qde7petx>          <code data-astro-cid-qde7petx>
+// Create a separate adapter instance for sensitive data
+const secureAdapter = new IndexedDBAdapter(&#123;
+  dbName: "secure_storage",
+  encrypt: true
+&#125;);
+
+// Store encrypted credentials
+async function storeCredentials(username, accessToken, refreshToken) &#123;
+  await secureAdapter.set("auth.username", username);
+  await secureAdapter.set("auth.accessToken", accessToken);
+  await secureAdapter.set("auth.refreshToken", refreshToken);
+  await secureAdapter.set("auth.timestamp", Date.now());
+&#125;
+
+// Get authentication data
+async function getAuthData() &#123;
+  const authData = await secureAdapter.list("auth.");
+  return authData.reduce((obj, item) => &#123;
+    obj[item.key.replace("auth.", "")] = item.value;
+    return obj;
+  &#125;, &#123;&#125;);
+&#125;
+
+// Clear authentication on logout
+async function logout() &#123;
+  const authKeys = await secureAdapter.list("auth.");
+  for (const item of authKeys) &#123;
+    await secureAdapter.delete(item.key);
+  &#125;
+&#125;
+          </code>
+        </pre> </div> </section> <section class="strf-section" data-astro-cid-qde7petx> <h2 data-astro-cid-qde7petx>5. Comparison with Other Storage Adapters</h2> <table class="strf-comparison-table" data-astro-cid-qde7petx> <thead data-astro-cid-qde7petx> <tr data-astro-cid-qde7petx> <th data-astro-cid-qde7petx>Feature</th> <th data-astro-cid-qde7petx>IndexedDBAdapter</th> <th data-astro-cid-qde7petx>LocalStorageAdapter</th> <th data-astro-cid-qde7petx>SessionStorageAdapter</th> </tr> </thead> <tbody data-astro-cid-qde7petx> <tr data-astro-cid-qde7petx> <td data-astro-cid-qde7petx>Persistence</td> <td data-astro-cid-qde7petx>Persistent until explicitly cleared</td> <td data-astro-cid-qde7petx>Persistent until explicitly cleared</td> <td data-astro-cid-qde7petx>Until tab/browser closes</td> </tr> <tr data-astro-cid-qde7petx> <td data-astro-cid-qde7petx>Storage Capacity</td> <td data-astro-cid-qde7petx>Large (typically 50MB-unlimited)</td> <td data-astro-cid-qde7petx>~5MB per origin</td> <td data-astro-cid-qde7petx>~5MB per origin</td> </tr> <tr data-astro-cid-qde7petx> <td data-astro-cid-qde7petx>Performance</td> <td data-astro-cid-qde7petx>Optimized for large datasets</td> <td data-astro-cid-qde7petx>Fast for small data</td> <td data-astro-cid-qde7petx>Fast for small data</td> </tr> <tr data-astro-cid-qde7petx> <td data-astro-cid-qde7petx>Complexity</td> <td data-astro-cid-qde7petx>More complex, async API</td> <td data-astro-cid-qde7petx>Simple, synchronous underlying API</td> <td data-astro-cid-qde7petx>Simple, synchronous underlying API</td> </tr> <tr data-astro-cid-qde7petx> <td data-astro-cid-qde7petx>Best Use Cases</td> <td data-astro-cid-qde7petx>Large datasets, offline apps, complex data structures</td> <td data-astro-cid-qde7petx>User preferences, app settings</td> <td data-astro-cid-qde7petx>Form state, wizards, temporary authentication</td> </tr> <tr data-astro-cid-qde7petx> <td data-astro-cid-qde7petx>Browser Support</td> <td data-astro-cid-qde7petx>All modern browsers</td> <td data-astro-cid-qde7petx>All browsers</td> <td data-astro-cid-qde7petx>All browsers</td> </tr> <tr data-astro-cid-qde7petx> <td data-astro-cid-qde7petx>Cross-Tab Sync</td> <td data-astro-cid-qde7petx>Requires explicit <code data-astro-cid-qde7petx>channelName</code></td> <td data-astro-cid-qde7petx>Requires explicit <code data-astro-cid-qde7petx>channelName</code></td> <td data-astro-cid-qde7petx>Requires explicit <code data-astro-cid-qde7petx>channelName</code></td> </tr> </tbody> </table> </section> <section class="strf-section" data-astro-cid-qde7petx> <h2 data-astro-cid-qde7petx>6. Notes</h2> <ul data-astro-cid-qde7petx> <li data-astro-cid-qde7petx>
+IndexedDB operations are asynchronous - always use <code data-astro-cid-qde7petx>await</code> when
+          calling adapter methods.
+</li> <li data-astro-cid-qde7petx>
+Consider calling <code data-astro-cid-qde7petx>waitReadiness()</code> after initialization to ensure
+          the database is open before performing operations.
+</li> <li data-astro-cid-qde7petx>
+Use <code data-astro-cid-qde7petx>encrypt: true</code> for sensitive data that should be protected
+          even in the client-side storage.
+</li> <li data-astro-cid-qde7petx>
+Keys are namespaced under <code data-astro-cid-qde7petx>&#123;dbName&#125;__</code> to avoid conflicts.
+</li> <li data-astro-cid-qde7petx>
+A <code data-astro-cid-qde7petx>beforeunload</code> event listener is registered to properly clean
+          up resources.
+</li> <li data-astro-cid-qde7petx>
+Expirations are automatically checked and cleared at the specified
+          interval (default 1s).
+</li> <li data-astro-cid-qde7petx>
+For very large datasets, consider implementing pagination or lazy
+          loading patterns.
+</li> <li data-astro-cid-qde7petx>
+IndexedDB has excellent support across modern browsers but may require
+          polyfills for older browsers.
+</li> <li data-astro-cid-qde7petx>
+For complex data models, consider using multiple adapters with
+          different store names within the same database.
+</li> </ul> </section> </div> <script type="module" src="/_astro/indexeddb.astro_astro_type_script_index_0_lang.8l2Gquvl.js"></script>   </section> </main> <footer class="strf-footer"> <div>
+Developed by
+<br> <a href="https://www.linkedin.com/in/arthurjgermano" target="_blank">
+Arthur José Germano
+</a> </div> <div>MIT License – © 2025</div> </footer> </body></html>

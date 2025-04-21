@@ -1,0 +1,251 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><link rel="icon" type="image/svg+xml" href="/favicon.svg"><meta name="generator" content="Astro v5.6.1"><title>Storagefy | Frontend Storage Adapter</title><!-- Fonts --><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet"><!-- Meta tags --><meta name="description" content="Frontend storage adapter with framework integrations for IndexedDB, LocalStorage, and SessionStorage as well stores like Pinia, Svelte and React"><meta property="og:title" content="Storagefy"><meta property="og:description" content="Cross-framework storage solution for modern web applications"><meta property="og:type" content="website"><meta property="og:url" content="https://arthurgermano.github.com/storagefy"><script>
+      (() => {
+        try {
+          const raw = localStorage.getItem("storagefy__Storagefy_App");
+          const parsed = JSON.parse(raw || "{}");
+          const mode = parsed?.mode;
+
+          // Delay to ensure body is available
+          requestAnimationFrame(() => {
+            if (!document.body) return;
+
+            if (mode === "dark") {
+              document.body.classList.add("dark");
+            } else {
+              document.body.classList.remove("dark");
+            }
+          });
+        } catch (err) {
+          console.error("Failed to load theme mode from storage:", err);
+        }
+      })();
+    </script><link rel="stylesheet" href="/_astro/exports-usage.BQxDOPS-.css"></head> <body class=""> <header class="strf-header"> <span></span> <a href="/" class="strf-logo" style="margin-left: -1rem"> <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"> <path d="M12 2C17 2 21 3.79 21 6V18C21 20.21 17 22 12 22C7 22 3 20.21 3 18V6C3 3.79 7 2 12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M21 6C21 8.21 17 10 12 10C7 10 3 8.21 3 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M21 12C21 14.21 17 16 12 16C7 16 3 14.21 3 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path> </svg> <style>astro-island,astro-slot,astro-static-slot{display:contents}</style><script>(()=>{var a=(s,i,o)=>{let r=async()=>{await(await s())()},t=typeof i.value=="object"?i.value:void 0,c={rootMargin:t==null?void 0:t.rootMargin},n=new IntersectionObserver(e=>{for(let l of e)if(l.isIntersecting){n.disconnect(),r();break}},c);for(let e of o.children)n.observe(e)};(self.Astro||(self.Astro={})).visible=a;window.dispatchEvent(new Event("astro:visible"));})();;(()=>{var A=Object.defineProperty;var g=(i,o,a)=>o in i?A(i,o,{enumerable:!0,configurable:!0,writable:!0,value:a}):i[o]=a;var d=(i,o,a)=>g(i,typeof o!="symbol"?o+"":o,a);{let i={0:t=>m(t),1:t=>a(t),2:t=>new RegExp(t),3:t=>new Date(t),4:t=>new Map(a(t)),5:t=>new Set(a(t)),6:t=>BigInt(t),7:t=>new URL(t),8:t=>new Uint8Array(t),9:t=>new Uint16Array(t),10:t=>new Uint32Array(t),11:t=>1/0*t},o=t=>{let[l,e]=t;return l in i?i[l](e):void 0},a=t=>t.map(o),m=t=>typeof t!="object"||t===null?t:Object.fromEntries(Object.entries(t).map(([l,e])=>[l,o(e)]));class y extends HTMLElement{constructor(){super(...arguments);d(this,"Component");d(this,"hydrator");d(this,"hydrate",async()=>{var b;if(!this.hydrator||!this.isConnected)return;let e=(b=this.parentElement)==null?void 0:b.closest("astro-island[ssr]");if(e){e.addEventListener("astro:hydrate",this.hydrate,{once:!0});return}let c=this.querySelectorAll("astro-slot"),n={},h=this.querySelectorAll("template[data-astro-template]");for(let r of h){let s=r.closest(this.tagName);s!=null&&s.isSameNode(this)&&(n[r.getAttribute("data-astro-template")||"default"]=r.innerHTML,r.remove())}for(let r of c){let s=r.closest(this.tagName);s!=null&&s.isSameNode(this)&&(n[r.getAttribute("name")||"default"]=r.innerHTML)}let p;try{p=this.hasAttribute("props")?m(JSON.parse(this.getAttribute("props"))):{}}catch(r){let s=this.getAttribute("component-url")||"<unknown>",v=this.getAttribute("component-export");throw v&&(s+=` (export ${v})`),console.error(`[hydrate] Error parsing props for component ${s}`,this.getAttribute("props"),r),r}let u;await this.hydrator(this)(this.Component,p,n,{client:this.getAttribute("client")}),this.removeAttribute("ssr"),this.dispatchEvent(new CustomEvent("astro:hydrate"))});d(this,"unmount",()=>{this.isConnected||this.dispatchEvent(new CustomEvent("astro:unmount"))})}disconnectedCallback(){document.removeEventListener("astro:after-swap",this.unmount),document.addEventListener("astro:after-swap",this.unmount,{once:!0})}connectedCallback(){if(!this.hasAttribute("await-children")||document.readyState==="interactive"||document.readyState==="complete")this.childrenConnectedCallback();else{let e=()=>{document.removeEventListener("DOMContentLoaded",e),c.disconnect(),this.childrenConnectedCallback()},c=new MutationObserver(()=>{var n;((n=this.lastChild)==null?void 0:n.nodeType)===Node.COMMENT_NODE&&this.lastChild.nodeValue==="astro:end"&&(this.lastChild.remove(),e())});c.observe(this,{childList:!0}),document.addEventListener("DOMContentLoaded",e)}}async childrenConnectedCallback(){let e=this.getAttribute("before-hydration-url");e&&await import(e),this.start()}async start(){let e=JSON.parse(this.getAttribute("opts")),c=this.getAttribute("client");if(Astro[c]===void 0){window.addEventListener(`astro:${c}`,()=>this.start(),{once:!0});return}try{await Astro[c](async()=>{let n=this.getAttribute("renderer-url"),[h,{default:p}]=await Promise.all([import(this.getAttribute("component-url")),n?import(n):()=>()=>{}]),u=this.getAttribute("component-export")||"default";if(!u.includes("."))this.Component=h[u];else{this.Component=h;for(let f of u.split("."))this.Component=this.Component[f]}return this.hydrator=p,this.hydrate},e,this)}catch(n){console.error(`[astro-island] Error hydrating ${this.getAttribute("component-url")}`,n)}}attributeChangedCallback(){this.hydrate()}}d(y,"observedAttributes",["props"]),customElements.get("astro-island")||customElements.define("astro-island",y)}})();</script><astro-island uid="9uAr1" prefix="v0" component-url="/_astro/STRGF_Title.KDvzcBB3.js" component-export="default" renderer-url="/_astro/client.DxL-F4FW.js" props="{}" ssr client="visible" opts="{&quot;name&quot;:&quot;STRGF_Title&quot;,&quot;value&quot;:true}" await-children><div id="strf-title" data-v-5dc29489><!--[--><span data-v-5dc29489>S</span><span data-v-5dc29489>T</span><span data-v-5dc29489>O</span><span data-v-5dc29489>R</span><span data-v-5dc29489>A</span><span data-v-5dc29489>G</span><span data-v-5dc29489>E</span><span data-v-5dc29489>F</span><span data-v-5dc29489>Y</span><!--]--></div><!--astro:end--></astro-island> </a> <div style="min-width: 3rem"> <script>(()=>{var e=async t=>{await(await t())()};(self.Astro||(self.Astro={})).only=e;window.dispatchEvent(new Event("astro:only"));})();</script><astro-island uid="1fPeOB" component-url="/_astro/STRGF_ThemeButton.D7tAUEY4.js" component-export="default" renderer-url="/_astro/client.DxL-F4FW.js" props="{}" ssr client="only" opts="{&quot;name&quot;:&quot;STRGF_ThemeButton&quot;,&quot;value&quot;:true}"></astro-island> </div> </header> <main class="strf-layout"> <aside class="strf-sidebar" id="sidebar"> <nav> <ul class="strf-nav-group"> <li><a href="/storagefy/">Getting Started</a></li> <li><a href="/storagefy/exports-usage">Exports Usage</a></li> <li class="strf-nav-section">Storage</li> <ul> <li> <a href="/storagefy/storage/local-storage">Local Storage Adapter</a> </li> <li> <a href="/storagefy/storage/session-storage">Session Storage Adapter</a> </li> <li><a href="/storagefy/storage/indexeddb">Indexed DB Adapter</a></li> </ul> <li class="strf-nav-section">Store</li> <ul> <li><a href="/storagefy/store/react-store">React Store Adapter</a></li> <li><a href="/storagefy/store/svelte-store">Svelte Store Adapter</a></li> <li><a href="/storagefy/store/vue-store">Vue Store Adapter</a></li> </ul> <li> <a href="https://github.com/arthurgermano/storagefy" target="_blank">
+GitHub
+</a> </li> <li> <a href="https://npmjs.com/package/storagefy" target="_blank">
+NPM
+</a> </li> </ul> </nav> </aside> <section class="strf-main-content"> <button id="menuToggle" class="strf-mobile-toggle">☰</button>  <div class="strf-main-content"> <section class="strf-section"> <h1>React Store Adapter</h1> <p>
+Storagefy's React adapter provides seamless persistence for your React state management solutions. 
+        Compatible with popular libraries like Redux, Zustand, Jotai, and custom stores, this adapter synchronizes 
+        your application state with your chosen storage backend across page reloads and browser sessions.
+</p> </section> <section class="strf-section"> <h2>1. Basic Usage</h2> <p>
+The React adapter works with various React state management solutions, making it easy to persist 
+        your application state:
+</p> <pre class="strf-code-block">        <code>
+import &#123; startStoragefy, getReactAdapter &#125; from "storagefy";
+
+// Initialize the storage backend
+startStoragefy(&#123;
+  dbName: "my-react-app",
+  adapter: "indexedDB", // or "localStorage" or "sessionStorage"
+  encrypt: true,
+  channelName: "react-sync" // for cross-tab synchronization
+&#125;);
+
+// Get the React adapter
+const &#123; setInStorage, getFromStorage &#125; = getReactAdapter();
+
+// Connect with your store (works with Redux, Zustand, and more)
+await getFromStorage(store, "app-state"); // Always call this before setInStorage
+await setInStorage(store, "app-state", &#123;
+  timeout: 86400000, // 24 hour expiration
+  ignoreKeys: ["temporaryData", "loadingStates"],
+  syncTabs: true
+&#125;);
+        </code>
+      </pre> </section> <section class="strf-section"> <h2>2. Using the Helper Function</h2> <p>
+For a more concise approach, use the <code>setReactStorage</code> helper function:
+</p> <pre class="strf-code-block">        <code>
+import &#123; startStoragefy, setReactStorage &#125; from "storagefy";
+
+// Initialize storage backend
+startStoragefy(&#123;
+  dbName: "my-react-app",
+  adapter: "localStorage"
+&#125;);
+
+// Use the helper function to simplify the process
+await setReactStorage(store, "app-state", &#123;
+  timeout: 3600000, // 1 hour
+  ignoreKeys: ["_temp", "loading"],
+  syncTabs: true
+&#125;);
+        </code>
+      </pre> </section> <section class="strf-section"> <h2>3. Test It</h2> <h3>3.1 Redux</h3> <astro-island uid="1tzKe6" component-url="/_astro/STRGF_ShoppingDemoRedux.CDFfXqgd.js" component-export="default" renderer-url="/_astro/client.C-GIcO0P.js" props="{}" ssr client="only" opts="{&quot;name&quot;:&quot;STRGF_ShoppingDemoRedux&quot;,&quot;value&quot;:&quot;react&quot;}"></astro-island> <h3>3.2 Zustand</h3> <astro-island uid="um88u" component-url="/_astro/STRFG_ShoppingDemoZustand.BDGvB-ah.js" component-export="default" renderer-url="/_astro/client.C-GIcO0P.js" props="{}" ssr client="only" opts="{&quot;name&quot;:&quot;STRFG_ShoppingDemoZustand&quot;,&quot;value&quot;:&quot;react&quot;}"></astro-island> <h3>3.3 Jotai</h3> <astro-island uid="Z1uaQRg" component-url="/_astro/STRFG_ShoppingDemoJotai.vndsHEcT.js" component-export="default" renderer-url="/_astro/client.C-GIcO0P.js" props="{}" ssr client="only" opts="{&quot;name&quot;:&quot;STRFG_ShoppingDemoJotai&quot;,&quot;value&quot;:&quot;react&quot;}"></astro-island> </section> <section class="strf-section"> <h2>4. Advanced Configuration</h2> <p>
+You can directly instantiate the <code>ReactAdapter</code> class for more advanced control:
+</p> <pre class="strf-code-block">        <code>
+import &#123; ReactAdapter, IndexedDBAdapter &#125; from "storagefy";
+
+// Create storage adapter instance
+const storageAdapter = new IndexedDBAdapter(&#123; 
+  dbName: "react-app",
+  encrypt: true
+&#125;);
+
+// Create React adapter with the storage adapter
+const reactAdapter = new ReactAdapter(storageAdapter);
+
+// Connect with your store
+await reactAdapter.getFromStorage(store, "user-settings");
+await reactAdapter.setInStorage(store, "user-settings", &#123;
+  ignoreKeys: ["authToken"],
+  timeout: 604800000 // 1 week
+&#125;);
+        </code>
+      </pre> </section> <section class="strf-section"> <h2>5. Supported State Management Libraries</h2> <p>
+The React adapter is designed to work with multiple state management solutions:
+</p> <div class="strf-store-types"> <h3>Redux</h3> <p>
+Works with standard Redux stores by utilizing <code>getState</code>, <code>dispatch</code>, and <code>subscribe</code> methods.
+</p> <pre class="strf-code-block">          <code>
+import &#123; createStore &#125; from 'redux';
+import &#123; startStoragefy, setReactStorage &#125; from "storagefy";
+
+const reducer = (state = &#123; count: 0 &#125;, action) => &#123;
+  switch (action.type) &#123;
+    case 'INCREMENT':
+      return &#123; ...state, count: state.count + 1 &#125;;
+    case 'SET_STATE_FROM_STORAGE': // Important: handle this action type
+      return &#123; ...state, ...action.payload &#125;;
+    default:
+      return state;
+  &#125;
+&#125;;
+
+const store = createStore(reducer);
+
+// Persist Redux store
+await setReactStorage(store, "redux-state");
+          </code>
+        </pre> <p>
+Note: Your Redux reducer should handle the <code>SET_STATE_FROM_STORAGE</code> action type
+          for proper hydration from persistent storage.
+</p> </div> <div class="strf-store-types"> <h3>Zustand</h3> <p>
+Compatible with Zustand stores using <code>getState</code>, <code>setState</code>, and <code>subscribe</code> methods.
+</p> <pre class="strf-code-block">          <code>
+import create from 'zustand';
+import &#123; startStoragefy, setReactStorage &#125; from "storagefy";
+
+const useStore = create((set) => (&#123;
+  count: 0,
+  increment: () => set((state) => (&#123; count: state.count + 1 &#125;)),
+  reset: () => set(&#123; count: 0 &#125;)
+&#125;));
+
+// Persist Zustand store
+await setReactStorage(useStore, "zustand-state");
+          </code>
+        </pre> </div> <div class="strf-store-types"> <h3>Jotai</h3> <p>
+Works with Jotai atom values using <code>get</code>, <code>set</code>, and subscription mechanisms.
+</p> <pre class="strf-code-block">          <code>
+import &#123; atom, useAtom &#125; from 'jotai';
+import &#123; atomWithStorage &#125; from 'jotai/utils';
+import &#123; startStoragefy, getReactAdapter &#125; from "storagefy";
+
+const countAtom = atom(0);
+
+// For Jotai, you'll need a store-like wrapper
+const jotaiStore = &#123;
+  get: () => countAtom.init,
+  set: (value) => &#123;
+    countAtom.init = value;
+    // Trigger updates to subscribers
+  &#125;,
+  subscribe: (callback) => &#123;
+    // Setup subscription to atom changes
+    // Return unsubscribe function
+  &#125;
+&#125;;
+
+// Get the adapter
+const &#123; setInStorage, getFromStorage &#125; = getReactAdapter();
+
+// Persist Jotai state
+await getFromStorage(jotaiStore, "jotai-state");
+await setInStorage(jotaiStore, "jotai-state");
+          </code>
+        </pre> </div> <div class="strf-store-types"> <h3>Custom React State Hooks</h3> <p>
+You can adapt custom React hooks or state management solutions by creating a compatible store interface.
+</p> <pre class="strf-code-block">          <code>
+import &#123; useState, useEffect &#125; from 'react';
+import &#123; startStoragefy, setReactStorage &#125; from "storagefy";
+
+// Create a store-like interface for your custom hook
+function createStore(initialState) &#123;
+  let state = initialState;
+  const listeners = new Set();
+  
+  return &#123;
+    getState: () => state,
+    setState: (newState) => &#123;
+      state = typeof newState === 'function' ? newState(state) : newState;
+      listeners.forEach(listener => listener(state));
+    &#125;,
+    subscribe: (listener) => &#123;
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    &#125;
+  &#125;;
+&#125;
+
+const customStore = createStore(&#123; theme: 'light', language: 'en' &#125;);
+
+// Persist custom store
+await setReactStorage(customStore, "custom-state");
+          </code>
+        </pre> </div> </section> <section class="strf-section"> <h2>6. Configuration Options</h2> <p>
+The <code>setInStorage</code> method accepts the following options:
+</p> <div class="strf-options"> <h3>Options Object</h3> <ul> <li> <code>ignoreKeys</code>: Array of store property keys to exclude from persistence
+<p class="strf-option-desc">
+Use this for sensitive data, temporary state, or large objects that shouldn't be persisted.
+</p> </li> <li> <code>timeout</code>: Expiration duration in milliseconds
+<p class="strf-option-desc">
+After this duration, the stored data will be considered expired and removed.
+</p> </li> <li> <code>syncTabs</code>: Boolean flag to enable cross-tab synchronization
+<p class="strf-option-desc">
+When true, changes made in one browser tab will be reflected in all others.
+              Requires <code>channelName</code> to be set during <code>startStoragefy</code>.
+</p> </li> </ul> </div> </section> <section class="strf-section"> <h2>7. Cross-Tab Synchronization</h2> <p>
+The React adapter supports real-time synchronization of state across multiple browser tabs:
+</p> <pre class="strf-code-block">        <code>
+// Initialize with channel name for cross-tab communication
+startStoragefy(&#123;
+  dbName: "my-react-app",
+  adapter: "indexedDB",
+  channelName: "react-sync" // Required for cross-tab sync
+&#125;);
+
+// Enable syncTabs in your store configuration
+await setReactStorage(store, "shared-state", &#123;
+  syncTabs: true
+&#125;);
+
+// Now changes to this store in one tab will be reflected in other tabs
+        </code>
+      </pre> <p>
+The synchronization uses the <code>BroadcastChannel</code> API under the hood and
+        intelligently handles different store types to apply updates appropriately.
+</p> </section> <section class="strf-section"> <h2>8. API Reference</h2> <div class="strf-api-method"> <h3><code>getReactAdapter([options])</code></h3> <p>
+Returns a configured React adapter instance. Options include:
+</p> <ul> <li><code>adapterParams</code>: Configuration for the underlying storage adapter</li> </ul> <p>Returns: <code>&#123; setInStorage, getFromStorage &#125;</code> methods</p> </div> <div class="strf-api-method"> <h3><code>setReactStorage(store, key, [options])</code></h3> <p>
+Helper function that internally calls <code>getFromStorage</code> followed by <code>setInStorage</code>.
+</p> <ul> <li><code>store</code>: React state store instance (Redux, Zustand, etc.)</li> <li><code>key</code>: Storage key string</li> <li><code>options</code>: Configuration options (ignoreKeys, timeout, syncTabs)</li> </ul> <p>Returns: Promise resolving to true on success</p> </div> <div class="strf-api-method"> <h3><code>ReactAdapter</code> Class Methods</h3> <ul> <li> <code>setInStorage(store, key, options)</code>: Persists store state and sets up subscription
+</li> <li> <code>getFromStorage(store, key)</code>: Loads persisted state into store
+</li> <li> <code>destroy()</code>: Cleans up subscriptions when adapter is no longer needed
+</li> </ul> </div> </section> <section class="strf-section"> <h2>9. Best Practices</h2> <ul> <li>
+Always call <code>getFromStorage</code> before <code>setInStorage</code> to hydrate your store with existing data
+</li> <li>
+For Redux stores, ensure your reducer handles the <code>SET_STATE_FROM_STORAGE</code> action type
+</li> <li>
+Use <code>ignoreKeys</code> for sensitive information, temporary UI state, or large objects
+</li> <li>
+Set appropriate <code>timeout</code> values based on the nature of your data
+</li> <li>
+When using <code>syncTabs</code>, be mindful of complex state mutations that could conflict across tabs
+</li> <li>
+Call <code>destroy()</code> on the adapter instance when unmounting components to avoid memory leaks
+</li> <li>
+Consider using separate storage keys for different logical parts of your application state
+</li> </ul> </section> </div>  </section> </main> <footer class="strf-footer"> <div>
+Developed by
+<br> <a href="https://www.linkedin.com/in/arthurjgermano" target="_blank">
+Arthur José Germano
+</a> </div> <div>MIT License – © 2025</div> </footer> </body></html>

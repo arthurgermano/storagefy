@@ -1,0 +1,837 @@
+---
+import Layout from "../../layouts/Layout.astro";
+---
+
+<Layout>
+  <div class="strf-main-content">
+    <section class="strf-section">
+      <h1>Local Storage Adapter</h1>
+      <p>
+        The <code>LocalStorageAdapter</code> extends the abstract <code
+          >StorageAdapter</code
+        > class, providing a concrete implementation for persisting data to browser's
+        <code>localStorage</code>. It offers enhanced capabilities including
+        encryption, expiration management, metadata tracking, and optional
+        cross-tab synchronization.
+      </p>
+    </section>
+
+    <section class="strf-section">
+      <h2>1. Getting Started</h2>
+      <p>Initialize the adapter with the desired options:</p>
+      <pre
+        class="strf-code-block">
+        <code>
+import &#123; LocalStorageAdapter &#125; from "storagefy";
+
+const adapter = new LocalStorageAdapter(&#123;
+  dbName: "my-app",               // required - creates namespace for your keys
+  encrypt: true,                  // optional, default false
+  version: 1,                     // optional, default 1
+  expireCheckInterval: 2000,      // optional, default 1000ms
+  description: "Main app store",  // optional
+  channelName: "main-channel"     // optional - used for sync between tabs
+  enableSyncTabs: false,          // optional, default false - Whether to enable sync automatically on change key value
+&#125;);
+        </code>
+      </pre>
+      <p>
+        The <code>channelName</code> enables automatic synchronization of data across
+        open tabs using the <code>CrossTabChannel</code> communication system, even
+        for <code>sessionStorage</code> or when using other adapters that support
+        channels.
+      </p>
+    </section>
+
+    <section class="strf-section">
+      <h2>2. Core Concepts</h2>
+
+      <div class="strf-concept">
+        <h3>Storage Namespacing</h3>
+        <p>
+          All keys are automatically namespaced using the format <code
+            >&#123;dbName&#125;__</code
+          > to avoid conflicts with other applications using localStorage. When encryption
+          is enabled, keys are additionally obfuscated using a simple algorithm.
+        </p>
+      </div>
+
+      <div class="strf-concept">
+        <h3>Encryption</h3>
+        <p>
+          When the <code>encrypt: true</code> option is set, all values are encrypted
+          before storage and decrypted when retrieved using the <code
+            >cryptoHelper</code
+          > module. Keys are also obfuscated to enhance security.
+        </p>
+      </div>
+
+      <div class="strf-concept">
+        <h3>Cross-Tab Communication</h3>
+        <p>
+          When a <code>channelName</code> is provided, changes to data are broadcast
+          across browser tabs using the <code>CrossTabChannel</code> mechanism. This
+          enables real-time synchronization of state across multiple open instances
+          of your application.
+        </p>
+      </div>
+
+      <div class="strf-concept">
+        <h3>Expiration Management</h3>
+        <p>
+          The adapter includes a built-in expiration system that automatically
+          removes expired items at regular intervals (configurable via <code
+            >expireCheckInterval</code
+          >). This helps manage temporary data without manual cleanup.
+        </p>
+      </div>
+    </section>
+
+    <section class="strf-section">
+      <h2>3. Test It</h2>
+      <div class="strf-demo">
+        <div class="day-night-demo">
+          <div class="sky">
+            <div class="sun"></div>
+            <div class="moon"></div>
+            <div class="stars"></div>
+            <div class="clouds">
+              <div class="cloud cloud-1"></div>
+              <div class="cloud cloud-2"></div>
+              <div class="cloud cloud-3"></div>
+            </div>
+          </div>
+          <div class="ground"></div>
+          <div style="text-align: center;">
+            <small>
+              <i>
+                <a href="/storage/local-storage" target="_blank"
+                  >Open a new tab in this page, when the animation ends it
+                  should update the another tab as well</a
+                >
+              </i>
+            </small>
+            <br />
+            <b>wait the animation to finish before go to another tab!</b>
+          </div>
+          <div class="controls">
+            <button id="toggle-cycle" class="strf-button"
+              >Toggle Day/Night</button
+            >
+            <button id="reset-cycle" class="strf-button">Reset</button>
+            <button id="toggle-encrypt" class="strf-button"
+              >Turn Encryption ON</button
+            >
+          </div>
+          <div class="storage-debug">
+            <h4>LocalStorage Content:</h4>
+            <pre id="storage-content"></pre>
+          </div>
+        </div>
+      </div>
+
+      <section class="strf-section">
+        <h2>4. API Reference</h2>
+
+        <div class="strf-api-method">
+          <h3>
+            <code> await adapter.get(key) </code>
+          </h3>
+          <p>
+            Retrieves a value. Returns <code>null</code> if not found or expired.
+            Handles decryption automatically if encryption is enabled.
+          </p>
+          <pre
+            class="strf-code-block">
+          <code>
+await adapter.set("theme", "dark");
+const value = await adapter.get("theme"); // "dark"
+          </code>
+        </pre>
+        </div>
+
+        <div class="strf-api-method">
+          <h3>
+            <code>await adapter.set(key, value, expire?)</code>
+          </h3>
+          <p>
+            Stores a value. Optional <code>expire</code> is in milliseconds from
+            now. Handles encryption automatically if enabled and broadcasts changes
+            to other tabs if using a channel.
+          </p>
+          <pre
+            class="strf-code-block">
+          <code>
+// Save a theme that expires in 5 seconds
+await adapter.set("theme", "dark", 5000);
+          </code>
+        </pre>
+        </div>
+
+        <div class="strf-api-method">
+          <h3>
+            <code>await adapter.delete(key)</code>
+          </h3>
+          <p>
+            Removes a key and its expiration metadata. Also broadcasts deletion
+            to other tabs if using a channel.
+          </p>
+          <pre
+            class="strf-code-block">
+          <code>
+await adapter.delete("theme");
+          </code>
+        </pre>
+        </div>
+
+        <div class="strf-api-method">
+          <h3>
+            <code>await adapter.list(prefix?)</code>
+          </h3>
+          <p>
+            Returns all keys/values matching the prefix (defaults to all in
+            namespace). Decrypts values if encryption is enabled.
+          </p>
+          <pre
+            class="strf-code-block">
+          <code>
+await adapter.set("a", 1);
+await adapter.set("b", 2);
+const list = await adapter.list(); 
+// [&#123; key: "a", value: 1 &#125;, &#123; key: "b", value: 2 &#125;]
+          </code>
+        </pre>
+        </div>
+
+        <div class="strf-api-method">
+          <h3>
+            <code>await adapter.has(key)</code>
+          </h3>
+          <p>
+            Returns <code>true</code> if the key exists and has not expired.
+          </p>
+          <pre
+            class="strf-code-block">
+          <code>
+await adapter.has("a"); // true or false
+          </code>
+        </pre>
+        </div>
+
+        <div class="strf-api-method">
+          <h3>
+            <code>await adapter.clear()</code>
+          </h3>
+          <p>
+            Clears all data, including metadata and expirations, within this
+            adapter's namespace.
+          </p>
+          <pre
+            class="strf-code-block">
+          <code>
+await adapter.clear();
+          </code>
+        </pre>
+        </div>
+
+        <div class="strf-api-method">
+          <h3>
+            <code>await adapter.reset()</code>
+          </h3>
+          <p>
+            Removes only data keys related to the namespace, not metadata.
+            Useful for clearing user data while preserving system configuration.
+          </p>
+          <pre
+            class="strf-code-block">
+          <code>
+await adapter.reset();
+          </code>
+        </pre>
+        </div>
+
+        <div class="strf-api-method">
+          <h3>
+            <code>await adapter.setExpire(key, timestamp)</code>
+          </h3>
+          <p>
+            Set a custom expiration time (timestamp in ms) for a specific key.
+          </p>
+          <pre
+            class="strf-code-block">
+          <code>
+const future = Date.now() + 10000;
+await adapter.setExpire("token", future);
+          </code>
+        </pre>
+        </div>
+
+        <div class="strf-api-method">
+          <h3>
+            <code>await adapter.getExpire(key)</code>
+          </h3>
+          <p>
+            Returns the expiration timestamp for a key, or <code>null</code> if no
+            expiration is set.
+          </p>
+          <pre
+            class="strf-code-block">
+          <code>
+const expireTime = await adapter.getExpire("token");
+// Returns timestamp or null
+          </code>
+        </pre>
+        </div>
+
+        <div class="strf-api-method">
+          <h3>
+            <code>await adapter.deleteExpire(key)</code>
+          </h3>
+          <p>Removes the expiration for the given key, making it permanent.</p>
+          <pre
+            class="strf-code-block">
+          <code>
+await adapter.deleteExpire("token");
+          </code>
+        </pre>
+        </div>
+
+        <div class="strf-api-method">
+          <h3>
+            <code>await adapter.clearExpire()</code>
+          </h3>
+          <p>Deletes all keys that have expired based on their timestamps.</p>
+          <pre
+            class="strf-code-block">
+          <code>
+await adapter.clearExpire();
+          </code>
+        </pre>
+        </div>
+
+        <div class="strf-api-method">
+          <h3>
+            <code>adapter.destroy()</code>
+          </h3>
+          <p>
+            Cleans up resources, stops the expiration timer, and removes event
+            listeners.
+          </p>
+          <pre
+            class="strf-code-block">
+          <code>
+adapter.destroy(); // Clean up before unmounting
+          </code>
+        </pre>
+        </div>
+
+        <div class="strf-api-method">
+          <h3>
+            <code>adapter.emitDataChange(key, value, origin)</code>
+          </h3>
+          <p>
+            Explicitly broadcasts a data change event to other tabs (usually
+            called automatically by set/delete).
+          </p>
+          <pre
+            class="strf-code-block">
+          <code>
+adapter.emitDataChange("settings", newSettings, "tab-123");
+          </code>
+        </pre>
+        </div>
+
+        <div class="strf-api-method">
+          <h3>
+            <code>adapter.onDataChanged(callback)</code>
+          </h3>
+          <p>
+            Registers a callback function to handle data changes from other tabs
+            or contexts.
+          </p>
+          <pre
+            class="strf-code-block">
+          <code>
+adapter.onDataChanged((&#123; key, value, origin &#125;) => &#123;
+  console.log(`Data for $&#123;key&#125; changed in tab $&#123;origin&#125;`);
+  // Update UI or app state accordingly
+&#125;);
+          </code>
+        </pre>
+        </div>
+      </section>
+
+      <section class="strf-section">
+        <h2>5. Advanced Usage</h2>
+
+        <div class="strf-advanced">
+          <h3>State Management Integration</h3>
+          <p>
+            The adapter can be used to persist and synchronize state management
+            libraries like Vuex, Pinia, Redux, or Zustand across tabs:
+          </p>
+          <pre
+            class="strf-code-block">
+          <code>
+// With Pinia store
+const userStore = useUserStore();
+
+// Listen for external changes
+adapter.onDataChanged((&#123; key, value &#125;) => &#123;
+  if (key === "user-data") &#123;
+    userStore.updateUser(value);
+  &#125;
+&#125;);
+
+// Save changes from this tab
+watch(() => userStore.user, (newValue) => &#123;
+  adapter.set("user-data", newValue);
+&#125;);
+          </code>
+        </pre>
+        </div>
+
+        <div class="strf-advanced">
+          <h3>Session Expiration</h3>
+          <p>Managing authentication tokens with automatic expiration:</p>
+          <pre
+            class="strf-code-block">
+          <code>
+// Store auth token with expiration
+const tokenExpiry = Date.now() + (60 * 60 * 1000); // 1 hour
+await adapter.set("auth-token", token, tokenExpiry);
+
+// Check if session is valid
+const isLoggedIn = await adapter.has("auth-token");
+          </code>
+        </pre>
+        </div>
+      </section>
+
+      <section class="strf-section">
+        <h2>6. Notes</h2>
+        <ul>
+          <li>
+            Keys are namespaced under <code>&#123;dbName&#125;__</code> to avoid
+            conflicts.
+          </li>
+          <li>
+            Expirations are automatically checked and removed in intervals
+            (default 1s).
+          </li>
+          <li>
+            Encryption only applies if enabled via <code>encrypt: true</code> option.
+          </li>
+          <li>
+            Use <code>channelName</code> to sync updates across tabs (e.g. for state
+            management libraries).
+          </li>
+          <li>
+            The adapter handles browser storage limits gracefully with error
+            logging.
+          </li>
+          <li>Destroyed adapters should be re-initialized if needed again.</li>
+        </ul>
+      </section>
+    </section>
+  </div>
+
+  <script>
+    // Wait for the DOM to be fully loaded
+    document.addEventListener("DOMContentLoaded", async function () {
+      try {
+        const anime = await import("../../assets/js/anime.min.js");
+        const loadAdapter = await import(
+          "../../../../src/adapters/LocalStorageAdapter.js"
+        );
+
+        const LocalStorageAdapter = loadAdapter.default;
+
+        // Create our LocalStorage adapter
+        const demoAdapter = new LocalStorageAdapter({
+          dbName: "animation-demo-LS",
+          expireCheckInterval: 0,
+          channelName: "day-night-channel",
+        });
+
+        // Elements
+        const sun = document.querySelector(".sun");
+        const moon = document.querySelector(".moon");
+        const sky = document.querySelector(".sky");
+        const stars = document.querySelector(".stars");
+        const clouds = document.querySelector(".clouds");
+        const toggleBtn = document.getElementById("toggle-cycle");
+        const resetBtn = document.getElementById("reset-cycle");
+        const encryptBtn = document.getElementById("toggle-encrypt");
+        const storageContent = document.getElementById("storage-content");
+
+        // Animation state
+        let isNight = false;
+        let animation = null;
+
+        // Function to update storage debug display
+        async function updateStorageDisplay() {
+          const storageData = await demoAdapter.list();
+          storageContent.textContent = JSON.stringify(storageData, null, 2);
+        }
+
+        // Load initial state from storage
+        async function initializeState() {
+          const storedState = await demoAdapter.get("isNight");
+          if (storedState !== null) {
+            isNight = storedState;
+            if (isNight) {
+              // If it's night, immediately set night state
+              setNightState();
+            } else {
+              // If it's day, immediately set day state
+              setDayState();
+            }
+          }
+          updateStorageDisplay();
+        }
+
+        // Set immediate night state without animation
+        function setNightState() {
+          sky.style.backgroundColor = "#0c1445";
+          sun.style.transform = "translateY(200px)";
+          moon.style.transform = "translateY(-80px)";
+          stars.style.opacity = "1";
+          clouds.style.opacity = "0.3";
+        }
+
+        // Set immediate day state without animation
+        function setDayState() {
+          sky.style.backgroundColor = "#87CEEB";
+          sun.style.transform = "translateY(-80px)";
+          moon.style.transform = "translateY(200px)";
+          stars.style.opacity = "0";
+          clouds.style.opacity = "1";
+        }
+
+        // Animate to night
+        function animateToNight() {
+          if (animation) animation.pause();
+
+          animation = anime.createTimeline({
+            easing: "easeInOutQuad",
+            onComplete: async function () {
+              await demoAdapter.set("isNight", true);
+              demoAdapter.emitDataChange("isNight", true, "toNight");
+              updateStorageDisplay();
+            },
+          });
+
+          animation
+            .add(sky, { backgroundColor: "#0c1445" }, 0)
+            .add(sun, { y: 200 }, 0)
+            .add(moon, { y: -80 }, 0)
+            .add(stars, { opacity: 1 }, 0)
+            .add(clouds, { opacity: 0.3 }, 0);
+        }
+
+        // Animate to day
+        function animateToDay() {
+          if (animation) animation.pause();
+
+          animation = anime.createTimeline({
+            easing: "easeInOutQuad",
+            onComplete: async function () {
+              await demoAdapter.set("isNight", false);
+              demoAdapter.emitDataChange("isNight", true, "toDay");
+              updateStorageDisplay();
+            },
+          });
+
+          animation
+            .add(sky, { backgroundColor: "#87CEEB" }, 0)
+            .add(sun, { y: -80 }, 0)
+            .add(moon, { y: 200 }, 0)
+            .add(stars, { opacity: 0 }, 0)
+            .add(clouds, { opacity: 1 }, 0);
+        }
+
+        // Toggle cycle handler
+        toggleBtn.addEventListener("click", function () {
+          isNight = !isNight;
+          if (isNight) {
+            animateToNight();
+          } else {
+            animateToDay();
+          }
+        });
+
+        // Reset handler
+        resetBtn.addEventListener("click", async function () {
+          await demoAdapter.clear();
+          isNight = false;
+          animateToDay();
+          updateStorageDisplay();
+        });
+
+        // Encryption toggle handler
+        encryptBtn.addEventListener("click", async function () {
+          resetBtn.click(); // Reset the state
+          if (demoAdapter.encrypt) {
+            encryptBtn.textContent = "Turn Encryption ON";
+            demoAdapter.encrypt = false;
+          } else {
+            encryptBtn.textContent = "Turn Encryption OFF";
+            demoAdapter.encrypt = true;
+          }
+          toggleBtn.click(); // Trigger the animation
+        });
+
+        // Listen for changes from other tabs
+        demoAdapter.onDataChanged(async ({ key, value }) => {
+          if (key === "isNight") {
+            isNight = value;
+            if (isNight) {
+              setNightState();
+            } else {
+              setDayState();
+            }
+            updateStorageDisplay();
+          }
+        });
+
+        // Initialize
+        initializeState();
+
+        demoAdapter.onDataChanged(async (data) => {
+          initializeState();
+        });
+      } catch (error) {
+        console.error("Error initializing demo:", error);
+      }
+    });
+  </script>
+</Layout>
+
+<style>
+  .strf-demo {
+    margin: 2rem 0;
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  }
+
+  .day-night-demo {
+    width: 100%;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+
+  .sky {
+    height: 300px;
+    background-color: #87ceeb;
+    border-radius: 8px 8px 0 0;
+    position: relative;
+    overflow: hidden;
+    transition: background-color 0.5s;
+  }
+
+  .sun {
+    width: 80px;
+    height: 80px;
+    background: #fdb813;
+    border-radius: 50%;
+    box-shadow: 0 0 30px #fdb813;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -80px);
+    z-index: 10;
+  }
+
+  .moon {
+    width: 70px;
+    height: 70px;
+    background: #ecf0f1;
+    border-radius: 50%;
+    box-shadow: 0 0 20px rgba(236, 240, 241, 0.7);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, 200px);
+    z-index: 9;
+  }
+
+  .stars {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: radial-gradient(
+        2px 2px at 20px 30px,
+        #fff,
+        rgba(0, 0, 0, 0)
+      ),
+      radial-gradient(2px 2px at 40px 70px, #fff, rgba(0, 0, 0, 0)),
+      radial-gradient(2px 2px at 50px 160px, #fff, rgba(0, 0, 0, 0)),
+      radial-gradient(2px 2px at 90px 40px, #fff, rgba(0, 0, 0, 0)),
+      radial-gradient(2px 2px at 130px 80px, #fff, rgba(0, 0, 0, 0)),
+      radial-gradient(2px 2px at 160px 120px, #fff, rgba(0, 0, 0, 0)),
+      radial-gradient(2px 2px at 200px 20px, #fff, rgba(0, 0, 0, 0)),
+      radial-gradient(2px 2px at 240px 50px, #fff, rgba(0, 0, 0, 0)),
+      radial-gradient(2px 2px at 270px 90px, #fff, rgba(0, 0, 0, 0)),
+      radial-gradient(2px 2px at 300px 60px, #fff, rgba(0, 0, 0, 0)),
+      radial-gradient(2px 2px at 350px 20px, #fff, rgba(0, 0, 0, 0)),
+      radial-gradient(2px 2px at 380px 30px, #fff, rgba(0, 0, 0, 0)),
+      radial-gradient(2px 2px at 400px 70px, #fff, rgba(0, 0, 0, 0)),
+      radial-gradient(2px 2px at 450px 40px, #fff, rgba(0, 0, 0, 0)),
+      radial-gradient(2px 2px at 500px 60px, #fff, rgba(0, 0, 0, 0)),
+      radial-gradient(2px 2px at 550px 20px, #fff, rgba(0, 0, 0, 0));
+    opacity: 0;
+    z-index: 8;
+  }
+
+  .ground {
+    height: 100px;
+    background: linear-gradient(to bottom, #5d8b5a, #3b5e48);
+    border-radius: 0 0 8px 8px;
+  }
+
+  .clouds {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    z-index: 11;
+  }
+
+  .cloud {
+    position: absolute;
+    background: white;
+    border-radius: 50px;
+  }
+
+  .cloud::before,
+  .cloud::after {
+    content: "";
+    position: absolute;
+    background: white;
+    border-radius: 50%;
+  }
+
+  .cloud-1 {
+    width: 120px;
+    height: 40px;
+    top: 50px;
+    left: 80px;
+  }
+
+  .cloud-1::before {
+    width: 60px;
+    height: 60px;
+    top: -30px;
+    left: 15px;
+  }
+
+  .cloud-1::after {
+    width: 50px;
+    height: 50px;
+    top: -20px;
+    right: 15px;
+  }
+
+  .cloud-2 {
+    width: 100px;
+    height: 30px;
+    top: 100px;
+    right: 120px;
+  }
+
+  .cloud-2::before {
+    width: 50px;
+    height: 50px;
+    top: -25px;
+    left: 10px;
+  }
+
+  .cloud-2::after {
+    width: 40px;
+    height: 40px;
+    top: -15px;
+    right: 10px;
+  }
+
+  .cloud-3 {
+    width: 80px;
+    height: 25px;
+    top: 30px;
+    right: 60px;
+  }
+
+  .cloud-3::before {
+    width: 40px;
+    height: 40px;
+    top: -20px;
+    left: 8px;
+  }
+
+  .cloud-3::after {
+    width: 30px;
+    height: 30px;
+    top: -12px;
+    right: 8px;
+  }
+
+  .controls {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+    justify-content: center;
+  }
+
+  .strf-button {
+    background-color: #703ad5;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background-color 0.2s;
+  }
+
+  .strf-button:hover {
+    background-color: #2c5ea3;
+  }
+
+  .storage-debug {
+    margin-top: 20px;
+    padding: 15px;
+    background: #f1f1f1;
+    border-radius: 4px;
+    font-size: 14px;
+  }
+
+  .storage-debug h4 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    color: #333;
+  }
+
+  #storage-content {
+    background: #fff;
+    color: black;
+    padding: 10px;
+    border-radius: 4px;
+    max-height: 100px;
+    overflow-y: auto;
+    font-family: monospace;
+    white-space: pre-wrap;
+    word-break: break-all;
+    font-size: 12px;
+  }
+
+  .sun,
+  .moon,
+  .stars,
+  .clouds,
+  .sky {
+    will-change: transform, opacity, background-color;
+  }
+</style>

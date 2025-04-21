@@ -1,0 +1,992 @@
+---
+import Layout from "../../layouts/Layout.astro";
+---
+
+<Layout>
+  <div class="strf-main-content">
+    <section class="strf-section">
+      <h1>IndexedDB Storage Adapter</h1>
+      <p>
+        The <code>IndexedDBAdapter</code> extends the abstract
+        <code>StorageAdapter</code>
+        class, providing a concrete implementation for persisting data to the browser's
+        <code>IndexedDB</code>. This adapter offers persistent, high-capacity
+        client-side storage with enhanced capabilities including encryption,
+        expiration management, metadata tracking, and optional cross-tab
+        synchronization.
+      </p>
+    </section>
+
+    <section class="strf-section">
+      <h2>1. Getting Started</h2>
+      <p>Initialize the adapter with the desired options:</p>
+      <pre
+        class="strf-code-block">
+        <code>
+import IndexedDBAdapter from "storagefy";
+
+const adapter = new IndexedDBAdapter(&#123;
+  dbName: "my-app",               // required - database name
+  storeName: "my-store",          // optional - defaults to `$&#123;dbName&#125;_store`
+  encrypt: true,                  // optional, default false
+  version: 1,                     // optional, default 1
+  expireCheckInterval: 2000,      // optional, default 1000ms
+  description: "App database",    // optional
+  channelName: "idb-channel"      // optional - used for sync between tabs
+  enableSyncTabs: false,          // optional, default false - Whether to enable sync 
+                                  // automatically on change key value
+&#125;);
+        </code>
+      </pre>
+      <p>
+        The <code>channelName</code> enables automatic synchronization of data across
+        open tabs using the <code>CrossTabChannel</code> communication system. This
+        is particularly useful for applications where you want to maintain state
+        consistency across multiple tabs.
+      </p>
+    </section>
+
+    <section class="strf-section">
+      <h2>2. Core Concepts</h2>
+
+      <div class="strf-concept">
+        <h3>Persistent Storage</h3>
+        <p>
+          IndexedDB provides a robust, persistent storage mechanism that can
+          handle significant amounts of structured data. Unlike localStorage or
+          sessionStorage, IndexedDB can store much larger data volumes
+          (typically limited only by disk space) and supports complex data
+          structures.
+        </p>
+      </div>
+
+      <div class="strf-concept">
+        <h3>Database Organization</h3>
+        <p>
+          Data is stored in an object store within the IndexedDB database. Each
+          adapter instance creates or uses a database with the specified
+          <code>dbName</code> and an object store (default name is
+          <code>&#123;dbName&#125;_store</code>). All keys are automatically
+          namespaced using the format
+          <code>&#123;dbName&#125;__</code>
+          to maintain organization.
+        </p>
+      </div>
+
+      <div class="strf-concept">
+        <h3>Encryption</h3>
+        <p>
+          When the <code>encrypt: true</code> option is set, all values are encrypted
+          before storage and decrypted when retrieved. Keys are also obfuscated to
+          enhance security, providing an additional layer of protection for sensitive
+          data.
+        </p>
+      </div>
+
+      <div class="strf-concept">
+        <h3>Asynchronous Operations</h3>
+        <p>
+          All IndexedDB operations are inherently asynchronous. The adapter
+          handles this complexity internally, providing a clean Promise-based
+          API for all operations that makes asynchronous storage operations
+          straightforward to work with.
+        </p>
+      </div>
+
+      <div class="strf-concept">
+        <h3>Cross-Tab Communication</h3>
+        <p>
+          When a <code>channelName</code> is provided, changes to data are broadcast
+          across browser tabs. This enables real-time synchronization of state across
+          multiple open instances of your application.
+        </p>
+      </div>
+
+      <div class="strf-concept">
+        <h3>Expiration Management</h3>
+        <p>
+          The adapter includes a built-in expiration system that automatically
+          removes expired items at regular intervals (configurable via
+          <code>expireCheckInterval</code>). This helps manage temporary data
+          without manual cleanup while maintaining long-term data integrity.
+        </p>
+      </div>
+
+      <div class="strf-concept">
+        <h3>Database Versioning</h3>
+        <p>
+          IndexedDB supports versioning to manage schema changes over time. The
+          adapter handles version upgrades automatically when you specify a new
+          version number, ensuring backward compatibility with previously stored
+          data.
+        </p>
+      </div>
+    </section>
+
+    <section class="strf-section">
+      <h2>3. Test It</h2>
+      <div class="strf-demo">
+        <div class="day-night-demo">
+          <div class="sky">
+            <div class="sun"></div>
+            <div class="cloud"></div>
+            <div class="raindrops"></div>
+          </div>
+          <div class="ground"></div>
+          <div style="text-align: center;">
+            <small>
+              <i>
+                <a href="/storage/indexeddb" target="_blank"
+                  >Open a new tab in this page, when the animation ends it
+                  should update the another tab as well</a
+                >
+              </i>
+            </small>
+            <br />
+            <b>wait the animation to finish before go to another tab!</b>
+          </div>
+          <div class="controls">
+            <button id="toggle-cycle" class="strf-button"
+              >Toggle Weather</button
+            >
+            <button id="reset-cycle" class="strf-button">Reset</button>
+            <button id="toggle-encrypt" class="strf-button"
+              >Turn Encryption ON</button
+            >
+          </div>
+          <div class="storage-debug">
+            <h4>IndexedDB Content:</h4>
+            <pre id="storage-content"></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="strf-section">
+      <h2>4. API Reference</h2>
+
+      <div class="strf-api-method">
+        <h3>
+          <code>await adapter.get(key)</code>
+        </h3>
+        <p>
+          Retrieves a value. Returns <code>null</code> if not found or expired. Handles
+          decryption automatically if encryption is enabled.
+        </p>
+        <pre
+          class="strf-code-block">
+          <code>
+await adapter.set("userId", "user123");
+const value = await adapter.get("userId"); // "user123"
+          </code>
+        </pre>
+      </div>
+
+      <div class="strf-api-method">
+        <h3>
+          <code>await adapter.set(key, value, expire?)</code>
+        </h3>
+        <p>
+          Stores a value. Optional <code>expire</code> is in milliseconds from now.
+          Handles encryption automatically if enabled and broadcasts changes to other
+          tabs if using a channel.
+        </p>
+        <pre
+          class="strf-code-block">
+          <code>
+// Save user data that expires in 7 days
+await adapter.set("userData", userData, 7 * 24 * 60 * 60 * 1000);
+          </code>
+        </pre>
+      </div>
+
+      <div class="strf-api-method">
+        <h3>
+          <code>await adapter.delete(key)</code>
+        </h3>
+        <p>
+          Removes a key and its expiration metadata. Also broadcasts deletion to
+          other tabs if using a channel.
+        </p>
+        <pre
+          class="strf-code-block">
+          <code>await adapter.delete("userId");</code>
+        </pre>
+      </div>
+
+      <div class="strf-api-method">
+        <h3>
+          <code>await adapter.list(prefix?)</code>
+        </h3>
+        <p>
+          Returns all keys/values matching the prefix (defaults to all in
+          namespace). Decrypts values if encryption is enabled.
+        </p>
+        <pre
+          class="strf-code-block">
+          <code>
+await adapter.set("user.name", "John");
+await adapter.set("user.email", "john@example.com");
+const userData = await adapter.list("user."); 
+// [&#123; key: "user.name", value: "John" &#125;, &#123; key: "user.email", value: "john@example.com" &#125;]
+          </code>
+        </pre>
+      </div>
+
+      <div class="strf-api-method">
+        <h3>
+          <code>await adapter.has(key)</code>
+        </h3>
+        <p>
+          Returns <code>true</code> if the key exists in the IndexedDB store and
+          has not expired.
+        </p>
+        <pre
+          class="strf-code-block"><code>await adapter.has("userId"); // true or false</code></pre>
+      </div>
+
+      <div class="strf-api-method">
+        <h3>
+          <code>await adapter.clear()</code>
+        </h3>
+        <p>
+          Clears all data, including metadata and expirations, within this
+          adapter's namespace.
+        </p>
+        <pre class="strf-code-block"><code>await adapter.clear();</code></pre>
+      </div>
+
+      <div class="strf-api-method">
+        <h3>
+          <code>await adapter.reset()</code>
+        </h3>
+        <p>
+          Removes only data keys related to the namespace, not metadata. Useful
+          for clearing user data while preserving system configuration.
+        </p>
+        <pre class="strf-code-block"><code>await adapter.reset();</code></pre>
+      </div>
+
+      <div class="strf-api-method">
+        <h3>
+          <code>await adapter.setExpire(key, timestamp)</code>
+        </h3>
+        <p>
+          Set a custom expiration time (timestamp in ms) for a specific key.
+        </p>
+        <pre
+          class="strf-code-block">
+          <code>
+const futureDate = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days
+await adapter.setExpire("userData", futureDate);
+          </code>
+        </pre>
+      </div>
+
+      <div class="strf-api-method">
+        <h3>
+          <code>await adapter.getExpire(key)</code>
+        </h3>
+        <p>
+          Returns the expiration timestamp for a key, or <code>null</code> if no
+          expiration is set.
+        </p>
+        <pre
+          class="strf-code-block">
+          <code>
+const expireTime = await adapter.getExpire("userData");
+// Returns timestamp or null
+          </code>
+        </pre>
+      </div>
+
+      <div class="strf-api-method">
+        <h3>
+          <code>await adapter.deleteExpire(key)</code>
+        </h3>
+        <p>
+          Removes the expiration for the given key, making it persist
+          indefinitely.
+        </p>
+        <pre
+          class="strf-code-block">
+          <code>
+await adapter.deleteExpire("userData");
+          </code>
+        </pre>
+      </div>
+
+      <div class="strf-api-method">
+        <h3>
+          <code>await adapter.clearExpire()</code>
+        </h3>
+        <p>Deletes all keys that have expired based on their timestamps.</p>
+        <pre
+          class="strf-code-block">
+          <code>
+await adapter.clearExpire();
+          </code>
+        </pre>
+      </div>
+
+      <div class="strf-api-method">
+        <h3>
+          <code>await adapter.waitReadiness(timeout?, tries?)</code>
+        </h3>
+        <p>
+          Waits for the IndexedDB to be ready before proceeding. Useful when
+          executing operations immediately after initialization.
+        </p>
+        <pre
+          class="strf-code-block">
+          <code>
+await adapter.waitReadiness();
+// Now safe to perform operations
+          </code>
+        </pre>
+      </div>
+
+      <div class="strf-api-method">
+        <h3>
+          <code>adapter.destroy()</code>
+        </h3>
+        <p>
+          Cleans up resources, stops the expiration timer, and removes event
+          listeners. Called automatically on page unload.
+        </p>
+        <pre
+          class="strf-code-block">
+          <code>
+adapter.destroy(); // Clean up before component unmount
+          </code>
+        </pre>
+      </div>
+
+      <div class="strf-api-method">
+        <h3>
+          <code>adapter.emitDataChange(key, value, origin)</code>
+        </h3>
+        <p>
+          Explicitly broadcasts a data change event to other tabs (usually
+          called automatically by set/delete).
+        </p>
+        <pre
+          class="strf-code-block">
+          <code>
+adapter.emitDataChange("appState", newState, "tab-123");
+          </code>
+        </pre>
+      </div>
+
+      <div class="strf-api-method">
+        <h3>
+          <code>adapter.onDataChanged(callback)</code>
+        </h3>
+        <p>
+          Registers a callback function to handle data changes from other tabs
+          or contexts.
+        </p>
+        <pre
+          class="strf-code-block">
+          <code>
+adapter.onDataChanged((&#123; key, value, origin &#125;) => &#123;
+  console.log(`Data for $&#123;key&#125; changed in tab $&#123;origin&#125;`);
+  // Update UI or app state accordingly
+&#125;);
+          </code>
+        </pre>
+      </div>
+    </section>
+
+    <section class="strf-section">
+      <h2>5. Advanced Usage</h2>
+
+      <div class="strf-advanced">
+        <h3>Offline-First Application Data</h3>
+        <p>The adapter is ideal for managing offline-first application data:</p>
+        <pre
+          class="strf-code-block">
+          <code>
+// Store application data for offline use
+async function cacheApplicationData(data) &#123;
+  await adapter.set("app.cache", data);
+  await adapter.set("app.lastSyncTime", Date.now());
+&#125;
+
+// Retrieve cached data when offline
+async function getOfflineData() &#123;
+  return await adapter.get("app.cache");
+&#125;
+
+// Check if cache needs refreshing (older than 1 day)
+async function shouldRefreshCache() &#123;
+  const lastSync = await adapter.get("app.lastSyncTime");
+  if (!lastSync) return true;
+  const oneDay = 24 * 60 * 60 * 1000;
+  return (Date.now() - lastSync) > oneDay;
+&#125;
+          </code>
+        </pre>
+      </div>
+
+      <div class="strf-advanced">
+        <h3>User Preferences Management</h3>
+        <p>Managing persistent user preferences:</p>
+        <pre
+          class="strf-code-block">
+          <code>
+// Store user preferences
+async function saveUserPreferences(preferences) &#123;
+  await adapter.set("preferences", preferences);
+&#125;
+
+// Load user preferences
+async function loadUserPreferences() &#123;
+  return await adapter.get("preferences") || getDefaultPreferences();
+&#125;
+
+// Update a single preference
+async function updatePreference(key, value) &#123;
+  const prefs = await loadUserPreferences();
+  prefs[key] = value;
+  await saveUserPreferences(prefs);
+&#125;
+          </code>
+        </pre>
+      </div>
+
+      <div class="strf-advanced">
+        <h3>Complex Data Structures with Prefixes</h3>
+        <p>Managing related data using key prefixes:</p>
+        <pre
+          class="strf-code-block">
+          <code>
+// Store product data
+async function saveProduct(product) &#123;
+  await adapter.set(`product.$&#123;product.id&#125;`, product);
+&#125;
+
+// Add product to favorites
+async function addToFavorites(productId) &#123;
+  await adapter.set(`favorite.$&#123;productId&#125;`, true);
+&#125;
+
+// Get all favorite products
+async function getFavoriteProducts() &#123;
+  const favorites = await adapter.list("favorite.");
+  const productIds = favorites.map(f => f.key.replace("favorite.", ""));
+  
+  const products = [];
+  for (const id of productIds) &#123;
+    const product = await adapter.get(`product.$&#123;id&#125;`);
+    if (product) products.push(product);
+  &#125;
+  
+  return products;
+&#125;
+          </code>
+        </pre>
+      </div>
+
+      <div class="strf-advanced">
+        <h3>IndexedDB with Encryption for Sensitive Data</h3>
+        <p>Secure storage of sensitive user information:</p>
+        <pre
+          class="strf-code-block">
+          <code>
+// Create a separate adapter instance for sensitive data
+const secureAdapter = new IndexedDBAdapter(&#123;
+  dbName: "secure_storage",
+  encrypt: true
+&#125;);
+
+// Store encrypted credentials
+async function storeCredentials(username, accessToken, refreshToken) &#123;
+  await secureAdapter.set("auth.username", username);
+  await secureAdapter.set("auth.accessToken", accessToken);
+  await secureAdapter.set("auth.refreshToken", refreshToken);
+  await secureAdapter.set("auth.timestamp", Date.now());
+&#125;
+
+// Get authentication data
+async function getAuthData() &#123;
+  const authData = await secureAdapter.list("auth.");
+  return authData.reduce((obj, item) => &#123;
+    obj[item.key.replace("auth.", "")] = item.value;
+    return obj;
+  &#125;, &#123;&#125;);
+&#125;
+
+// Clear authentication on logout
+async function logout() &#123;
+  const authKeys = await secureAdapter.list("auth.");
+  for (const item of authKeys) &#123;
+    await secureAdapter.delete(item.key);
+  &#125;
+&#125;
+          </code>
+        </pre>
+      </div>
+    </section>
+
+    <section class="strf-section">
+      <h2>5. Comparison with Other Storage Adapters</h2>
+
+      <table class="strf-comparison-table">
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th>IndexedDBAdapter</th>
+            <th>LocalStorageAdapter</th>
+            <th>SessionStorageAdapter</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Persistence</td>
+            <td>Persistent until explicitly cleared</td>
+            <td>Persistent until explicitly cleared</td>
+            <td>Until tab/browser closes</td>
+          </tr>
+          <tr>
+            <td>Storage Capacity</td>
+            <td>Large (typically 50MB-unlimited)</td>
+            <td>~5MB per origin</td>
+            <td>~5MB per origin</td>
+          </tr>
+          <tr>
+            <td>Performance</td>
+            <td>Optimized for large datasets</td>
+            <td>Fast for small data</td>
+            <td>Fast for small data</td>
+          </tr>
+          <tr>
+            <td>Complexity</td>
+            <td>More complex, async API</td>
+            <td>Simple, synchronous underlying API</td>
+            <td>Simple, synchronous underlying API</td>
+          </tr>
+          <tr>
+            <td>Best Use Cases</td>
+            <td>Large datasets, offline apps, complex data structures</td>
+            <td>User preferences, app settings</td>
+            <td>Form state, wizards, temporary authentication</td>
+          </tr>
+          <tr>
+            <td>Browser Support</td>
+            <td>All modern browsers</td>
+            <td>All browsers</td>
+            <td>All browsers</td>
+          </tr>
+          <tr>
+            <td>Cross-Tab Sync</td>
+            <td>Requires explicit <code>channelName</code></td>
+            <td>Requires explicit <code>channelName</code></td>
+            <td>Requires explicit <code>channelName</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="strf-section">
+      <h2>6. Notes</h2>
+      <ul>
+        <li>
+          IndexedDB operations are asynchronous - always use <code>await</code> when
+          calling adapter methods.
+        </li>
+        <li>
+          Consider calling <code>waitReadiness()</code> after initialization to ensure
+          the database is open before performing operations.
+        </li>
+        <li>
+          Use <code>encrypt: true</code> for sensitive data that should be protected
+          even in the client-side storage.
+        </li>
+        <li>
+          Keys are namespaced under <code>&#123;dbName&#125;__</code> to avoid conflicts.
+        </li>
+        <li>
+          A <code>beforeunload</code> event listener is registered to properly clean
+          up resources.
+        </li>
+        <li>
+          Expirations are automatically checked and cleared at the specified
+          interval (default 1s).
+        </li>
+        <li>
+          For very large datasets, consider implementing pagination or lazy
+          loading patterns.
+        </li>
+        <li>
+          IndexedDB has excellent support across modern browsers but may require
+          polyfills for older browsers.
+        </li>
+        <li>
+          For complex data models, consider using multiple adapters with
+          different store names within the same database.
+        </li>
+      </ul>
+    </section>
+  </div>
+
+  <script>
+    // Wait for the DOM to be fully loaded
+    document.addEventListener("DOMContentLoaded", async function () {
+      try {
+        const anime = await import("../../assets/js/anime.min.js");
+        const loadAdapter = await import(
+          "../../../../src/adapters/IndexedDBAdapter.js"
+        );
+
+        const IndexedDBAdapter = loadAdapter.default;
+
+        // Create our IndexedDB adapter
+        const demoAdapter = new IndexedDBAdapter({
+          dbName: "animation-demo-IDB",
+          expireCheckInterval: 0,
+          channelName: "weather-channel",
+        });
+
+        await demoAdapter.waitReadiness();
+
+        // Elements
+        const sun = document.querySelector(".sun");
+        const cloud = document.querySelector(".cloud");
+        const raindrops = document.querySelector(".raindrops");
+        const sky = document.querySelector(".sky");
+        const toggleBtn = document.getElementById("toggle-cycle");
+        const resetBtn = document.getElementById("reset-cycle");
+        const encryptBtn = document.getElementById("toggle-encrypt");
+        const storageContent = document.getElementById("storage-content");
+
+        // Animation state
+        let isRainy = false;
+        let animation = null;
+
+        // Function to update storage debug display
+        async function updateStorageDisplay() {
+          const storageData = await demoAdapter.list();
+          storageContent.textContent = JSON.stringify(storageData, null, 2);
+        }
+
+        // Load initial state from storage
+        async function initializeState() {
+          const storedState = await demoAdapter.get("isRainy");
+          if (storedState !== null) {
+            isRainy = storedState;
+            if (isRainy) {
+              // If it's rainy, immediately set rainy state
+              setRainyState();
+            } else {
+              // If it's sunny, immediately set sunny state
+              setSunnyState();
+            }
+          }
+          updateStorageDisplay();
+        }
+
+        // Set immediate rainy state without animation
+        function setRainyState() {
+          sky.style.backgroundColor = "#6a7b8c"; // Gray sky
+          sun.style.opacity = "0";
+          cloud.style.opacity = "1";
+          raindrops.style.opacity = "1";
+        }
+
+        // Set immediate sunny state without animation
+        function setSunnyState() {
+          sky.style.backgroundColor = "#87CEEB"; // Sky blue
+          sun.style.opacity = "1";
+          cloud.style.opacity = "0";
+          raindrops.style.opacity = "0";
+        }
+
+        // Animate to rainy weather
+        function animateToRainy(skipEmit = false) {
+          if (animation) animation.pause();
+
+          animation = anime.createTimeline({
+            easing: "easeInOutQuad",
+            onComplete: async function () {
+              await demoAdapter.set("isRainy", true);
+              if (!skipEmit) {
+                demoAdapter.emitDataChange("isRainy", true, "toRainy");
+              }
+              updateStorageDisplay();
+            },
+          });
+
+          animation
+            .add(sky, { backgroundColor: "#6a7b8c" }, 0)
+            .add(sun, { opacity: 0 }, 0)
+            .add(cloud, { opacity: 1 }, 0)
+            .add(raindrops, { opacity: 1 }, 0);
+        }
+
+        // Animate to sunny weather
+        function animateToSunny(skipEmit) {
+          if (animation) animation.pause();
+
+          animation = anime.createTimeline({
+            easing: "easeInOutQuad",
+            onComplete: async function () {
+              await demoAdapter.set("isRainy", false);
+              if (!skipEmit) {
+                demoAdapter.emitDataChange("isRainy", false, "toSunny");
+              }
+              updateStorageDisplay();
+            },
+          });
+
+          animation
+            .add(sky, { backgroundColor: "#87CEEB" }, 0)
+            .add(sun, { opacity: 1 }, 0)
+            .add(cloud, { opacity: 0 }, 0)
+            .add(raindrops, { opacity: 0 }, 0);
+        }
+
+        // Toggle cycle handler
+        toggleBtn.addEventListener("click", function () {
+          isRainy = !isRainy;
+          if (isRainy) {
+            animateToRainy();
+          } else {
+            animateToSunny();
+          }
+        });
+
+        // Reset handler
+        resetBtn.addEventListener("click", async function () {
+          await demoAdapter.clear();
+          isRainy = false;
+          animateToSunny();
+          updateStorageDisplay();
+        });
+
+        // Encryption toggle handler
+        encryptBtn.addEventListener("click", async function () {
+          resetBtn.click(); // Reset the state
+          if (demoAdapter.encrypt) {
+            encryptBtn.textContent = "Turn Encryption ON";
+            demoAdapter.encrypt = false;
+          } else {
+            encryptBtn.textContent = "Turn Encryption OFF";
+            demoAdapter.encrypt = true;
+          }
+
+          toggleBtn.click(); // Trigger the animation
+        });
+
+        // Initialize
+        initializeState();
+
+        demoAdapter.onDataChanged(async (data) => {
+          try {
+            if (data.origin === "reset") {
+              await demoAdapter.clear();
+              updateStorageDisplay();
+              return;
+            }
+            await demoAdapter.set("isRainy", data.value);
+            isRainy = data.value;
+            if (data.value) {
+              animateToRainy(true);
+            } else {
+              animateToSunny(true);
+            }
+          } catch (error) {
+            console.error("Error handling data change:", error);
+            throw error;
+          }
+        });
+      } catch (error) {
+        console.error("Error initializing demo:", error);
+      }
+    });
+  </script>
+
+  <style>
+    .strf-comparison-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      text-align: center;
+    }
+
+    .strf-demo {
+      margin: 2rem 0;
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 1.5rem;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    }
+
+    .day-night-demo {
+      width: 100%;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .sky {
+      height: 300px;
+      background-color: #87CEEB; /* Sky blue */
+      border-radius: 8px 8px 0 0;
+      position: relative;
+      overflow: hidden;
+      transition: background-color 0.5s;
+    }
+
+    .sun {
+      width: 80px;
+      height: 80px;
+      background: #FFD700;
+      border-radius: 50%;
+      position: absolute;
+      top: 50px;
+      left: 50%;
+      transform: translateX(-50%);
+      box-shadow: 0 0 40px #FFD700;
+      opacity: 1;
+      transition: opacity 0.5s;
+    }
+
+    .cloud {
+      width: 120px;
+      height: 40px;
+      background: #FFFFFF;
+      border-radius: 40px;
+      position: absolute;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      opacity: 0;
+      transition: opacity 0.5s;
+    }
+
+    .cloud:before {
+      content: "";
+      width: 50px;
+      height: 50px;
+      background: #FFFFFF;
+      border-radius: 50%;
+      position: absolute;
+      top: -25px;
+      left: 20px;
+    }
+
+    .cloud:after {
+      content: "";
+      width: 30px;
+      height: 30px;
+      background: #FFFFFF;
+      border-radius: 50%;
+      position: absolute;
+      top: -15px;
+      right: 20px;
+    }
+
+    .raindrops {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      transition: opacity 0.5s;
+      left: 7.5rem;
+      top: 4rem; 
+    }
+
+    .raindrops:before {
+      content: "";
+      position: absolute;
+      width: 2px;
+      height: 10px;
+      background: #A5C8E4;
+      top: 50px;
+      left: 25%;
+      animation: rain 1s linear infinite;
+    }
+
+    .raindrops:after {
+      content: "";
+      position: absolute;
+      width: 2px;
+      height: 10px;
+      background: #A5C8E4;
+      top: 30px;
+      left: 35%;
+      animation: rain 1s linear infinite 0.3s;
+    }
+
+    @keyframes rain {
+      0% {
+        transform: translateY(0);
+      }
+      100% {
+        transform: translateY(200px);
+      }
+    }
+
+    .ground {
+      height: 100px;
+      background: linear-gradient(to bottom, #5d8b5a, #3b5e48);
+      border-radius: 0 0 8px 8px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+      justify-content: center;
+    }
+
+    .strf-button {
+      background-color: #703ad5;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background-color 0.2s;
+    }
+
+    .strf-button:hover {
+      background-color: #2c5ea3;
+    }
+
+    .storage-debug {
+      margin-top: 20px;
+      padding: 15px;
+      background: #f1f1f1;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    .storage-debug h4 {
+      margin-top: 0;
+      margin-bottom: 10px;
+      color: #333;
+    }
+
+    #storage-content {
+      background: #fff;
+      color: black;
+      padding: 10px;
+      border-radius: 4px;
+      max-height: 100px;
+      overflow-y: auto;
+      font-family: monospace;
+      white-space: pre-wrap;
+      word-break: break-all;
+      font-size: 12px;
+    }
+
+    .sun,
+    .cloud,
+    .raindrops,
+    .sky {
+      will-change: transform, opacity, background-color;
+    }
+  </style>
+</Layout>
