@@ -1,5 +1,6 @@
 import { createStore } from "zustand";
-import * as Storagefy from "storagefy";
+// import * as Storagefy from "storagefy";
+import * as Storagefy from "../../../../../../dist/index.cjs";
 
 // ------------------------------------------------------------------------------------------------
 

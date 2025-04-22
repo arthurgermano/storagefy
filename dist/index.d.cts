@@ -2186,11 +2186,11 @@ class StoreAdapter {
    * @example
    * adapter.destroy();
    */
-  destroy() {
-    if (this._unsubscribe) {
+  destroy(key) {
+    if (this._unsubscribe && this._unsubscribe[key]) {
       logInfo("StoreAdapter - destroy - Unsubscribing from store changes.");
-      this._unsubscribe();
-      this._unsubscribe = null;
+      this._unsubscribe[key]();
+      delete this._unsubscribe[key];
       return;
     }
     logInfo("StoreAdapter - destroy - No unsubscribe function to call.");
@@ -2224,6 +2224,7 @@ class PiniaAdapter extends StoreAdapter {
       throw new Error("Adapter provided is not defined");
     }
     this.adapter = adapter;
+    this._unsubscribe = {};
   }
 
   // ----------------------------------------------------------------------------------------------
@@ -2310,12 +2311,13 @@ class PiniaAdapter extends StoreAdapter {
       options.ignoreKeys = options.ignoreKeys || [];
 
       // Clean up previous subscription if exists
-      if (this._unsubscribe) {
-        this._unsubscribe();
+      if (this._unsubscribe[key]) {
+        this._unsubscribe[key]();
+        delete this._unsubscribe[key];
       }
 
       return new Promise((resolve, reject) => {
-        this._unsubscribe = store.$subscribe(async (mutation, state) => {
+        this._unsubscribe[key] = store.$subscribe(async (mutation, state) => {
           try {
             if (!state) {
               return resolve(true);
@@ -2370,6 +2372,7 @@ class PiniaAdapter extends StoreAdapter {
       logInfo("PiniaAdapter - getFromStorage - key:", key);
       this._checkStore(store);
       const storage = await this.adapter.get(key);
+
       if (!storage) {
         return;
       }
@@ -2415,7 +2418,7 @@ class ReactAdapter extends StoreAdapter {
       throw new Error("Adapter provided is not defined");
     }
     this.adapter = adapter;
-    this._unsubscribe = null;
+    this._unsubscribe = {};
   }
 
   // ----------------------------------------------------------------------------------------------
@@ -2565,8 +2568,9 @@ class ReactAdapter extends StoreAdapter {
       options.ignoreKeys = options.ignoreKeys || [];
 
       // Clean up previous subscription if exists
-      if (this._unsubscribe) {
-        this._unsubscribe();
+      if (this._unsubscribe[key]) {
+        this._unsubscribe[key]();
+        delete this._unsubscribe[key];
       }
 
       return new Promise((resolve, reject) => {
@@ -2601,13 +2605,13 @@ class ReactAdapter extends StoreAdapter {
           handleStateChange(store.getState());
 
           // Subscribe to changes
-          this._unsubscribe = store.subscribe(() => {
+          this._unsubscribe[key] = store.subscribe(() => {
             handleStateChange(store.getState());
           });
         }
         // For Zustand/useState-style stores
         else if (typeof store.subscribe === "function") {
-          this._unsubscribe = store.subscribe(handleStateChange);
+          this._unsubscribe[key] = store.subscribe(handleStateChange);
         } else {
           reject(new Error("Unsupported store type"));
           return;
@@ -2781,7 +2785,7 @@ class SvelteAdapter extends StoreAdapter {
       throw new Error("Adapter provided is not defined");
     }
     this.adapter = adapter;
-    this._unsubscribe = null;
+    this._unsubscribe = {};
   }
 
   // ----------------------------------------------------------------------------------------------
@@ -2861,8 +2865,9 @@ class SvelteAdapter extends StoreAdapter {
       options.ignoreKeys = options.ignoreKeys || [];
 
       // Clean up previous subscription if exists
-      if (this._unsubscribe) {
-        this._unsubscribe();
+      if (this._unsubscribe[key]) {
+        this._unsubscribe[key]();
+        delete this._unsubscribe[key];
       }
 
       return new Promise((resolve, reject) => {
@@ -2886,7 +2891,7 @@ class SvelteAdapter extends StoreAdapter {
           }
         });
 
-        this._unsubscribe = unsubscribe;
+        this._unsubscribe[key] = unsubscribe;
 
         if (options.syncTabs) {
           this._registerOnDataChanged(store);

@@ -1,4 +1,5 @@
-import * as Storagefy from "storagefy";
+// import * as Storagefy from "storagefy";
+import * as Storagefy from "../../../../../../dist/index.cjs";
 import store from "./store.js";
 
 // ------------------------------------------------------------------------------------------------

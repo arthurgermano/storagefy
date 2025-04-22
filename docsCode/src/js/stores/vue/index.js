@@ -1,5 +1,6 @@
 import { defineStore, createPinia } from "pinia";
-import * as Storagefy from "storagefy";
+// import * as Storagefy from "storagefy";
+import * as Storagefy from "../../../../../dist/index.cjs";
 
 // ------------------------------------------------------------------------------------------------
 

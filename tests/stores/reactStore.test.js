@@ -248,13 +248,10 @@ describe.each(Object.entries(adapterSetups))(
 
       it("should clean up subscription on destroy", async () => {
         await reactAdapter.setInStorage(store, "test-key");
-
-        const unsubSpy = vi.fn();
-        reactAdapter._unsubscribe = unsubSpy;
-
-        reactAdapter.destroy();
-        expect(unsubSpy).toHaveBeenCalled();
-        expect(reactAdapter._unsubscribe).toBe(null);
+        expect(reactAdapter._unsubscribe).toHaveProperty('test-key');
+        
+        reactAdapter.destroy("test-key");
+        expect(reactAdapter._unsubscribe).not.toHaveProperty('test-key');
       });
 
       // ------------------------------------------------------------------------------------------

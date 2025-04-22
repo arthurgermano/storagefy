@@ -36,7 +36,7 @@ class SvelteAdapter extends StoreAdapter {
       throw new Error("Adapter provided is not defined");
     }
     this.adapter = adapter;
-    this._unsubscribe = null;
+    this._unsubscribe = {};
   }
 
   // ----------------------------------------------------------------------------------------------
@@ -116,8 +116,9 @@ class SvelteAdapter extends StoreAdapter {
       options.ignoreKeys = options.ignoreKeys || [];
 
       // Clean up previous subscription if exists
-      if (this._unsubscribe) {
-        this._unsubscribe();
+      if (this._unsubscribe[key]) {
+        this._unsubscribe[key]();
+        delete this._unsubscribe[key];
       }
 
       return new Promise((resolve, reject) => {
@@ -141,7 +142,7 @@ class SvelteAdapter extends StoreAdapter {
           }
         });
 
-        this._unsubscribe = unsubscribe;
+        this._unsubscribe[key] = unsubscribe;
 
         if (options.syncTabs) {
           this._registerOnDataChanged(store);

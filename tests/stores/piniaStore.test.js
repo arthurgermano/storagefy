@@ -33,13 +33,21 @@ const adapterSetups = {
   LocalStorageAdapter: () => {
     const window = new Window();
     global.localStorage = window.localStorage;
-    return new LocalStorageAdapter({ dbName: "testDB", encrypt: false, expireCheckInterval: 50 });
+    return new LocalStorageAdapter({
+      dbName: "testDB",
+      encrypt: false,
+      expireCheckInterval: 50,
+    });
   },
 
   SessionStorageAdapter: () => {
     const window = new Window();
     global.sessionStorage = window.sessionStorage;
-    return new SessionStorageAdapter({ dbName: "testDB", encrypt: false, expireCheckInterval: 50 });
+    return new SessionStorageAdapter({
+      dbName: "testDB",
+      encrypt: false,
+      expireCheckInterval: 50,
+    });
   },
 
   IndexedDBAdapter: async () => {
@@ -118,28 +126,25 @@ describe.each(Object.entries(adapterSetups))(
 
     it("should clean up subscription on destroy", async () => {
       await piniaAdapter.setInStorage(store, "test-key");
+      expect(piniaAdapter._unsubscribe).toHaveProperty("test-key");
 
-      const unsubSpy = vi.fn();
-      piniaAdapter._unsubscribe = unsubSpy;
-
-      piniaAdapter.destroy();
-      expect(unsubSpy).toHaveBeenCalled();
-      expect(piniaAdapter._unsubscribe).toBe(null);
+      piniaAdapter.destroy("test-key");
+      expect(piniaAdapter._unsubscribe).not.toHaveProperty("test-key");
     });
 
     // --------------------------------------------------------------------------------------------
 
     it("should set the store as an expiring key in storage", async () => {
       await piniaAdapter.setInStorage(store, "test-key", { timeout: 150 });
-    
+
       const raw = await adapter.getExpire("test-key");
-      
+
       expect(raw).toBeDefined();
       expect(typeof raw).toBe("number");
 
       const currentTime = Date.now();
       expect(raw).toBeGreaterThan(currentTime);
-      expect(raw).toBeLessThan(currentTime + 200); 
+      expect(raw).toBeLessThan(currentTime + 200);
     });
 
     // --------------------------------------------------------------------------------------------
@@ -209,13 +214,13 @@ describe.each(Object.entries(adapterSetups))(
         state: () => ({ value: 123 }),
       });
       const otherStore = useOtherStore();
-    
+
       await piniaAdapter.setInStorage(store, "store-A");
       await piniaAdapter.setInStorage(otherStore, "store-B");
-    
+
       const dataA = await adapter.get("store-A");
       const dataB = await adapter.get("store-B");
-    
+
       expect(dataA).not.toEqual(dataB);
     });
 
@@ -225,7 +230,7 @@ describe.each(Object.entries(adapterSetups))(
       await piniaAdapter.setInStorage(store, "temp-key", { timeout: 150 });
       await sleep(100);
       await piniaAdapter.setInStorage(store, "temp-key", { timeout: 200 });
-    
+
       const expireTime = await adapter.getExpire("temp-key");
       expect(expireTime).toBeGreaterThan(Date.now() + 100);
     });
@@ -236,7 +241,7 @@ describe.each(Object.entries(adapterSetups))(
       await piniaAdapter.setInStorage(store, "test-key");
       store.name = "Bob";
       store.age = 30;
-    
+
       await sleep(10);
       const data = await adapter.get("test-key");
       expect(data.name).toBe("Bob");

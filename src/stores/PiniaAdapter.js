@@ -27,6 +27,7 @@ class PiniaAdapter extends StoreAdapter {
       throw new Error("Adapter provided is not defined");
     }
     this.adapter = adapter;
+    this._unsubscribe = {};
   }
 
   // ----------------------------------------------------------------------------------------------
@@ -113,12 +114,13 @@ class PiniaAdapter extends StoreAdapter {
       options.ignoreKeys = options.ignoreKeys || [];
 
       // Clean up previous subscription if exists
-      if (this._unsubscribe) {
-        this._unsubscribe();
+      if (this._unsubscribe[key]) {
+        this._unsubscribe[key]();
+        delete this._unsubscribe[key];
       }
 
       return new Promise((resolve, reject) => {
-        this._unsubscribe = store.$subscribe(async (mutation, state) => {
+        this._unsubscribe[key] = store.$subscribe(async (mutation, state) => {
           try {
             if (!state) {
               return resolve(true);
@@ -173,6 +175,7 @@ class PiniaAdapter extends StoreAdapter {
       logInfo("PiniaAdapter - getFromStorage - key:", key);
       this._checkStore(store);
       const storage = await this.adapter.get(key);
+
       if (!storage) {
         return;
       }

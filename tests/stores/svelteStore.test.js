@@ -118,13 +118,9 @@ describe.each(Object.entries(adapterSetups))(
 
     it("should clean up subscription on destroy", async () => {
       await svelteAdapter.setInStorage(store, "test-key");
-
-      const unsubSpy = vi.fn();
-      svelteAdapter._unsubscribe = unsubSpy;
-
-      svelteAdapter.destroy();
-      expect(unsubSpy).toHaveBeenCalled();
-      expect(svelteAdapter._unsubscribe).toBe(null);
+      expect(svelteAdapter._unsubscribe).toHaveProperty('test-key');
+      svelteAdapter.destroy('test-key');
+      expect(svelteAdapter._unsubscribe).not.toHaveProperty('test-key');
     });
 
     // ----------------------------------------------------------------------------------------------

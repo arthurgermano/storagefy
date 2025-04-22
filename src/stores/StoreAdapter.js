@@ -72,11 +72,11 @@ class StoreAdapter {
    * @example
    * adapter.destroy();
    */
-  destroy() {
-    if (this._unsubscribe) {
+  destroy(key) {
+    if (this._unsubscribe && this._unsubscribe[key]) {
       logInfo("StoreAdapter - destroy - Unsubscribing from store changes.");
-      this._unsubscribe();
-      this._unsubscribe = null;
+      this._unsubscribe[key]();
+      delete this._unsubscribe[key];
       return;
     }
     logInfo("StoreAdapter - destroy - No unsubscribe function to call.");
