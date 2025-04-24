@@ -118,9 +118,9 @@ describe.each(Object.entries(adapterSetups))(
 
     it("should clean up subscription on destroy", async () => {
       await svelteAdapter.setInStorage(store, "test-key");
-      expect(svelteAdapter._unsubscribe).toHaveProperty('test-key');
+      expect(svelteAdapter.stores).toHaveProperty('test-key');
       svelteAdapter.destroy('test-key');
-      expect(svelteAdapter._unsubscribe).not.toHaveProperty('test-key');
+      expect(svelteAdapter.stores).not.toHaveProperty('test-key');
     });
 
     // ----------------------------------------------------------------------------------------------

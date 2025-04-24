@@ -27,7 +27,7 @@ class PiniaAdapter extends StoreAdapter {
       throw new Error("Adapter provided is not defined");
     }
     this.adapter = adapter;
-    this._unsubscribe = {};
+    this.stores = {};
   }
 
   // ----------------------------------------------------------------------------------------------
@@ -53,16 +53,24 @@ class PiniaAdapter extends StoreAdapter {
    * from other sources (e.g., different tabs or windows).
    *
    * @private
-   * @param {Object} store - A reactive store (e.g., a Pinia) that will be updated when external changes occur.
+   * @param {String} key - The key to register the listener for
    */
-  _registerOnDataChanged(store) {
+  _registerOnDataChanged(key) {
     logInfo("PiniaAdapter - Registering onDataChanged listener");
-    if (!store) {
+    if (!key || !this.stores || !this.stores[key]) {
       return;
     }
     this.adapter.onDataChanged(async (data) => {
       try {
         if (data.adapterId == this.adapter.adapterId || !data.origin) {
+          return;
+        }
+
+        if (
+          !this.stores ||
+          !this.stores[data.key] ||
+          !this.stores[data.key].store
+        ) {
           return;
         }
 
@@ -73,12 +81,15 @@ class PiniaAdapter extends StoreAdapter {
           dataToPatch = await this.adapter._decrypt(data.key, data.value);
         }
 
-        if (JSON.stringify(store.$state) === JSON.stringify(dataToPatch)) {
+        if (
+          JSON.stringify(!this.stores[data.key].store.$state) ===
+          JSON.stringify(dataToPatch)
+        ) {
           return;
         }
 
-        store.$state = {
-          ...store.$state,
+        this.stores[data.key].store.$state = {
+          ...this.stores[data.key].store.$state,
           ...dataToPatch,
           STORAGEFY_SILENT_CHANNEL_UPDATE: true,
         };
@@ -113,42 +124,54 @@ class PiniaAdapter extends StoreAdapter {
       this._checkStore(store);
       options.ignoreKeys = options.ignoreKeys || [];
 
-      // Clean up previous subscription if exists
-      if (this._unsubscribe[key]) {
-        this._unsubscribe[key]();
-        delete this._unsubscribe[key];
+      if (
+        this.stores[key] &&
+        this.stores[key].unsubscribe &&
+        typeof this.stores[key].unsubscribe === "function"
+      ) {
+        this.stores[key].unsubscribe();
       }
+      delete this.stores[key];
+
+      this.stores[key] = {
+        key,
+        options,
+        store,
+        unsubscribe: null,
+      };
 
       return new Promise((resolve, reject) => {
-        this._unsubscribe[key] = store.$subscribe(async (mutation, state) => {
-          try {
-            if (!state) {
-              return resolve(true);
-            }
-            if (state.STORAGEFY_SILENT_CHANNEL_UPDATE) {
-              delete state.STORAGEFY_SILENT_CHANNEL_UPDATE;
-              return resolve(true);
-            }
-
-            const stateProps = { ...state };
-            for (let propKey in stateProps) {
-              if (options.ignoreKeys.includes(propKey)) {
-                stateProps[propKey] = undefined;
+        this.stores[key].unsubscribe = store.$subscribe(
+          async (mutation, state) => {
+            try {
+              if (!state) {
+                return resolve(true);
               }
+              if (state.STORAGEFY_SILENT_CHANNEL_UPDATE) {
+                delete state.STORAGEFY_SILENT_CHANNEL_UPDATE;
+                return resolve(true);
+              }
+
+              const stateProps = { ...state };
+              for (let propKey in stateProps) {
+                if (options.ignoreKeys.includes(propKey)) {
+                  stateProps[propKey] = undefined;
+                }
+              }
+
+              await this.adapter.set(key, stateProps, options.timeout);
+
+              return resolve(true);
+            } catch (error) {
+              return reject(error);
             }
-
-            await this.adapter.set(key, stateProps, options.timeout);
-
-            return resolve(true);
-          } catch (error) {
-            return reject(error);
           }
-        });
+        );
 
         store.$patch({ ...store.$state });
 
         if (options.syncTabs) {
-          this._registerOnDataChanged(store);
+          this._registerOnDataChanged(key);
         }
       });
     } catch (error) {

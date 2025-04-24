@@ -36,7 +36,7 @@ class SvelteAdapter extends StoreAdapter {
       throw new Error("Adapter provided is not defined");
     }
     this.adapter = adapter;
-    this._unsubscribe = {};
+    this.stores = {};
   }
 
   // ----------------------------------------------------------------------------------------------
@@ -47,10 +47,13 @@ class SvelteAdapter extends StoreAdapter {
    * from other sources (e.g., different tabs or windows).
    *
    * @private
-   * @param {Object} store - A reactive store (e.g., a Svelte store) that will be updated when external changes occur.
+   * @param {String} key - The key to register the listener for
    */
-  _registerOnDataChanged(store) {
+  _registerOnDataChanged(key) {
     logInfo("SvelteAdapter - Registering onDataChanged listener");
+    if (!key || !this.stores || !this.stores[key]) {
+      return;
+    }
     try {
       if (!store) {
         return;
@@ -60,8 +63,16 @@ class SvelteAdapter extends StoreAdapter {
           return;
         }
 
+        if (
+          !this.stores ||
+          !this.stores[data.key] ||
+          !this.stores[data.key].store
+        ) {
+          return;
+        }
+
         let currentState;
-        const unsubscribe = store.subscribe((value) => {
+        const unsubscribe = this.stores[data.key].store.subscribe((value) => {
           currentState = assign({}, value);
         });
         unsubscribe();
@@ -78,7 +89,7 @@ class SvelteAdapter extends StoreAdapter {
 
         // Update store with the patched data
         // In Svelte, we update the store directly
-        store.update((currentState) => ({
+        this.stores[data.key].store.update((currentState) => ({
           ...currentState,
           ...dataToPatch,
           STORAGEFY_SILENT_CHANNEL_UPDATE: true,
@@ -115,14 +126,24 @@ class SvelteAdapter extends StoreAdapter {
       this._checkStore(store);
       options.ignoreKeys = options.ignoreKeys || [];
 
-      // Clean up previous subscription if exists
-      if (this._unsubscribe[key]) {
-        this._unsubscribe[key]();
-        delete this._unsubscribe[key];
+      if (
+        this.stores[key] &&
+        this.stores[key].unsubscribe &&
+        typeof this.stores[key].unsubscribe === "function"
+      ) {
+        this.stores[key].unsubscribe();
       }
+      delete this.stores[key];
+
+      this.stores[key] = {
+        key,
+        options,
+        store,
+        unsubscribe: null,
+      };
 
       return new Promise((resolve, reject) => {
-        const unsubscribe = store.subscribe(async (state) => {
+        this.stores[key].unsubscribe = store.subscribe(async (state) => {
           try {
             if (!state) {
               return resolve(true);
@@ -142,10 +163,8 @@ class SvelteAdapter extends StoreAdapter {
           }
         });
 
-        this._unsubscribe[key] = unsubscribe;
-
         if (options.syncTabs) {
-          this._registerOnDataChanged(store);
+          this._registerOnDataChanged(key);
         }
       });
     } catch (error) {

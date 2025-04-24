@@ -9,7 +9,7 @@ import assign from 'misc-helpers/src/utils/assign.js';
  * Set to `true` to enable logging.
  * @type {boolean}
  */
-globalThis.storagefyDebug = false;
+globalThis.storagefyDebug = true;
 
 /**
  * Global debug level.
@@ -2187,10 +2187,10 @@ class StoreAdapter {
    * adapter.destroy();
    */
   destroy(key) {
-    if (this._unsubscribe && this._unsubscribe[key]) {
+    if (this.stores && this.stores[key] && typeof this.stores[key].unsubscribe === "function") {
       logInfo("StoreAdapter - destroy - Unsubscribing from store changes.");
-      this._unsubscribe[key]();
-      delete this._unsubscribe[key];
+      this.stores[key].unsubscribe;
+      delete this.stores[key];
       return;
     }
     logInfo("StoreAdapter - destroy - No unsubscribe function to call.");
@@ -2224,7 +2224,7 @@ class PiniaAdapter extends StoreAdapter {
       throw new Error("Adapter provided is not defined");
     }
     this.adapter = adapter;
-    this._unsubscribe = {};
+    this.stores = {};
   }
 
   // ----------------------------------------------------------------------------------------------
@@ -2250,16 +2250,24 @@ class PiniaAdapter extends StoreAdapter {
    * from other sources (e.g., different tabs or windows).
    *
    * @private
-   * @param {Object} store - A reactive store (e.g., a Pinia) that will be updated when external changes occur.
+   * @param {String} key - The key to register the listener for
    */
-  _registerOnDataChanged(store) {
+  _registerOnDataChanged(key) {
     logInfo("PiniaAdapter - Registering onDataChanged listener");
-    if (!store) {
+    if (!key || !this.stores || !this.stores[key]) {
       return;
     }
     this.adapter.onDataChanged(async (data) => {
       try {
         if (data.adapterId == this.adapter.adapterId || !data.origin) {
+          return;
+        }
+
+        if (
+          !this.stores ||
+          !this.stores[data.key] ||
+          !this.stores[data.key].store
+        ) {
           return;
         }
 
@@ -2270,12 +2278,15 @@ class PiniaAdapter extends StoreAdapter {
           dataToPatch = await this.adapter._decrypt(data.key, data.value);
         }
 
-        if (JSON.stringify(store.$state) === JSON.stringify(dataToPatch)) {
+        if (
+          JSON.stringify(!this.stores[data.key].store.$state) ===
+          JSON.stringify(dataToPatch)
+        ) {
           return;
         }
 
-        store.$state = {
-          ...store.$state,
+        this.stores[data.key].store.$state = {
+          ...this.stores[data.key].store.$state,
           ...dataToPatch,
           STORAGEFY_SILENT_CHANNEL_UPDATE: true,
         };
@@ -2310,42 +2321,54 @@ class PiniaAdapter extends StoreAdapter {
       this._checkStore(store);
       options.ignoreKeys = options.ignoreKeys || [];
 
-      // Clean up previous subscription if exists
-      if (this._unsubscribe[key]) {
-        this._unsubscribe[key]();
-        delete this._unsubscribe[key];
+      if (
+        this.stores[key] &&
+        this.stores[key].unsubscribe &&
+        typeof this.stores[key].unsubscribe === "function"
+      ) {
+        this.stores[key].unsubscribe();
       }
+      delete this.stores[key];
+
+      this.stores[key] = {
+        key,
+        options,
+        store,
+        unsubscribe: null,
+      };
 
       return new Promise((resolve, reject) => {
-        this._unsubscribe[key] = store.$subscribe(async (mutation, state) => {
-          try {
-            if (!state) {
-              return resolve(true);
-            }
-            if (state.STORAGEFY_SILENT_CHANNEL_UPDATE) {
-              delete state.STORAGEFY_SILENT_CHANNEL_UPDATE;
-              return resolve(true);
-            }
-
-            const stateProps = { ...state };
-            for (let propKey in stateProps) {
-              if (options.ignoreKeys.includes(propKey)) {
-                stateProps[propKey] = undefined;
+        this.stores[key].unsubscribe = store.$subscribe(
+          async (mutation, state) => {
+            try {
+              if (!state) {
+                return resolve(true);
               }
+              if (state.STORAGEFY_SILENT_CHANNEL_UPDATE) {
+                delete state.STORAGEFY_SILENT_CHANNEL_UPDATE;
+                return resolve(true);
+              }
+
+              const stateProps = { ...state };
+              for (let propKey in stateProps) {
+                if (options.ignoreKeys.includes(propKey)) {
+                  stateProps[propKey] = undefined;
+                }
+              }
+
+              await this.adapter.set(key, stateProps, options.timeout);
+
+              return resolve(true);
+            } catch (error) {
+              return reject(error);
             }
-
-            await this.adapter.set(key, stateProps, options.timeout);
-
-            return resolve(true);
-          } catch (error) {
-            return reject(error);
           }
-        });
+        );
 
         store.$patch({ ...store.$state });
 
         if (options.syncTabs) {
-          this._registerOnDataChanged(store);
+          this._registerOnDataChanged(key);
         }
       });
     } catch (error) {
@@ -2418,7 +2441,7 @@ class ReactAdapter extends StoreAdapter {
       throw new Error("Adapter provided is not defined");
     }
     this.adapter = adapter;
-    this._unsubscribe = {};
+    this.stores = {};
   }
 
   // ----------------------------------------------------------------------------------------------
@@ -2441,18 +2464,26 @@ class ReactAdapter extends StoreAdapter {
    * @private
    * @param {Object} store - A reactive store (e.g., a Redux, Jotai, Zustand or Custom store) that will be updated when external changes occur.
    */
-  _registerOnDataChanged(store) {
-    logInfo("ReactAdapter - Registering onDataChanged listener");
-    if (!store) {
+  _registerOnDataChanged(key) {
+    if (!key || !this.stores || !this.stores[key]) {
       return;
     }
-
+    logInfo("ReactAdapter - Registering onDataChanged listener");
     this.adapter.onDataChanged(async (data) => {
       try {
         // Skip if the data change originated from this adapter or has no origin
         if (data.adapterId == this.adapter.adapterId || !data.origin) {
           return;
         }
+
+        if (
+          !this.stores ||
+          !this.stores[data.key] ||
+          !this.stores[data.key].store
+        ) {
+          return;
+        }
+        const store = this.stores[data.key].store;
 
         let dataToPatch;
         if (!data.value) {
@@ -2567,11 +2598,21 @@ class ReactAdapter extends StoreAdapter {
       this._checkStore(store);
       options.ignoreKeys = options.ignoreKeys || [];
 
-      // Clean up previous subscription if exists
-      if (this._unsubscribe[key]) {
-        this._unsubscribe[key]();
-        delete this._unsubscribe[key];
+      if (
+        this.stores[key] &&
+        this.stores[key].unsubscribe &&
+        typeof this.stores[key].unsubscribe === "function"
+      ) {
+        this.stores[key].unsubscribe();
       }
+      delete this.stores[key];
+
+      this.stores[key] = {
+        key,
+        options,
+        store,
+        unsubscribe: null,
+      };
 
       return new Promise((resolve, reject) => {
         const handleStateChange = async (state) => {
@@ -2605,13 +2646,13 @@ class ReactAdapter extends StoreAdapter {
           handleStateChange(store.getState());
 
           // Subscribe to changes
-          this._unsubscribe[key] = store.subscribe(() => {
+          this.stores[key].unsubscribe = store.subscribe(() => {
             handleStateChange(store.getState());
           });
         }
         // For Zustand/useState-style stores
         else if (typeof store.subscribe === "function") {
-          this._unsubscribe[key] = store.subscribe(handleStateChange);
+          this.stores[key].unsubscribe = store.subscribe(handleStateChange);
         } else {
           reject(new Error("Unsupported store type"));
           return;
@@ -2619,7 +2660,7 @@ class ReactAdapter extends StoreAdapter {
 
         // Resolve immediately after subscription is set up
         if (options.syncTabs) {
-          this._registerOnDataChanged(store);
+          this._registerOnDataChanged(key);
         }
         resolve(true);
       });
@@ -2713,7 +2754,6 @@ class ReactAdapter extends StoreAdapter {
     }
 
     // Check if it's a Jotai atom
-    console.log("STORE>>", store);
     if (
       Array.isArray(store) &&
       store.length === 2 &&
@@ -2785,7 +2825,7 @@ class SvelteAdapter extends StoreAdapter {
       throw new Error("Adapter provided is not defined");
     }
     this.adapter = adapter;
-    this._unsubscribe = {};
+    this.stores = {};
   }
 
   // ----------------------------------------------------------------------------------------------
@@ -2796,10 +2836,13 @@ class SvelteAdapter extends StoreAdapter {
    * from other sources (e.g., different tabs or windows).
    *
    * @private
-   * @param {Object} store - A reactive store (e.g., a Svelte store) that will be updated when external changes occur.
+   * @param {String} key - The key to register the listener for
    */
-  _registerOnDataChanged(store) {
+  _registerOnDataChanged(key) {
     logInfo("SvelteAdapter - Registering onDataChanged listener");
+    if (!key || !this.stores || !this.stores[key]) {
+      return;
+    }
     try {
       if (!store) {
         return;
@@ -2809,8 +2852,16 @@ class SvelteAdapter extends StoreAdapter {
           return;
         }
 
+        if (
+          !this.stores ||
+          !this.stores[data.key] ||
+          !this.stores[data.key].store
+        ) {
+          return;
+        }
+
         let currentState;
-        const unsubscribe = store.subscribe((value) => {
+        const unsubscribe = this.stores[data.key].store.subscribe((value) => {
           currentState = assign({}, value);
         });
         unsubscribe();
@@ -2827,7 +2878,7 @@ class SvelteAdapter extends StoreAdapter {
 
         // Update store with the patched data
         // In Svelte, we update the store directly
-        store.update((currentState) => ({
+        this.stores[data.key].store.update((currentState) => ({
           ...currentState,
           ...dataToPatch,
           STORAGEFY_SILENT_CHANNEL_UPDATE: true,
@@ -2864,14 +2915,24 @@ class SvelteAdapter extends StoreAdapter {
       this._checkStore(store);
       options.ignoreKeys = options.ignoreKeys || [];
 
-      // Clean up previous subscription if exists
-      if (this._unsubscribe[key]) {
-        this._unsubscribe[key]();
-        delete this._unsubscribe[key];
+      if (
+        this.stores[key] &&
+        this.stores[key].unsubscribe &&
+        typeof this.stores[key].unsubscribe === "function"
+      ) {
+        this.stores[key].unsubscribe();
       }
+      delete this.stores[key];
+
+      this.stores[key] = {
+        key,
+        options,
+        store,
+        unsubscribe: null,
+      };
 
       return new Promise((resolve, reject) => {
-        const unsubscribe = store.subscribe(async (state) => {
+        this.stores[key].unsubscribe = store.subscribe(async (state) => {
           try {
             if (!state) {
               return resolve(true);
@@ -2891,10 +2952,8 @@ class SvelteAdapter extends StoreAdapter {
           }
         });
 
-        this._unsubscribe[key] = unsubscribe;
-
         if (options.syncTabs) {
-          this._registerOnDataChanged(store);
+          this._registerOnDataChanged(key);
         }
       });
     } catch (error) {

@@ -126,10 +126,10 @@ describe.each(Object.entries(adapterSetups))(
 
     it("should clean up subscription on destroy", async () => {
       await piniaAdapter.setInStorage(store, "test-key");
-      expect(piniaAdapter._unsubscribe).toHaveProperty("test-key");
+      expect(piniaAdapter.stores).toHaveProperty("test-key");
 
       piniaAdapter.destroy("test-key");
-      expect(piniaAdapter._unsubscribe).not.toHaveProperty("test-key");
+      expect(piniaAdapter.stores).not.toHaveProperty("test-key");
     });
 
     // --------------------------------------------------------------------------------------------

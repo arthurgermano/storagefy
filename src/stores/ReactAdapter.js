@@ -32,7 +32,7 @@ class ReactAdapter extends StoreAdapter {
       throw new Error("Adapter provided is not defined");
     }
     this.adapter = adapter;
-    this._unsubscribe = {};
+    this.stores = {};
   }
 
   // ----------------------------------------------------------------------------------------------
@@ -55,18 +55,26 @@ class ReactAdapter extends StoreAdapter {
    * @private
    * @param {Object} store - A reactive store (e.g., a Redux, Jotai, Zustand or Custom store) that will be updated when external changes occur.
    */
-  _registerOnDataChanged(store) {
-    logInfo("ReactAdapter - Registering onDataChanged listener");
-    if (!store) {
+  _registerOnDataChanged(key) {
+    if (!key || !this.stores || !this.stores[key]) {
       return;
     }
-
+    logInfo("ReactAdapter - Registering onDataChanged listener");
     this.adapter.onDataChanged(async (data) => {
       try {
         // Skip if the data change originated from this adapter or has no origin
         if (data.adapterId == this.adapter.adapterId || !data.origin) {
           return;
         }
+
+        if (
+          !this.stores ||
+          !this.stores[data.key] ||
+          !this.stores[data.key].store
+        ) {
+          return;
+        }
+        const store = this.stores[data.key].store;
 
         let dataToPatch;
         if (!data.value) {
@@ -181,11 +189,21 @@ class ReactAdapter extends StoreAdapter {
       this._checkStore(store);
       options.ignoreKeys = options.ignoreKeys || [];
 
-      // Clean up previous subscription if exists
-      if (this._unsubscribe[key]) {
-        this._unsubscribe[key]();
-        delete this._unsubscribe[key];
+      if (
+        this.stores[key] &&
+        this.stores[key].unsubscribe &&
+        typeof this.stores[key].unsubscribe === "function"
+      ) {
+        this.stores[key].unsubscribe();
       }
+      delete this.stores[key];
+
+      this.stores[key] = {
+        key,
+        options,
+        store,
+        unsubscribe: null,
+      };
 
       return new Promise((resolve, reject) => {
         const handleStateChange = async (state) => {
@@ -219,13 +237,13 @@ class ReactAdapter extends StoreAdapter {
           handleStateChange(store.getState());
 
           // Subscribe to changes
-          this._unsubscribe[key] = store.subscribe(() => {
+          this.stores[key].unsubscribe = store.subscribe(() => {
             handleStateChange(store.getState());
           });
         }
         // For Zustand/useState-style stores
         else if (typeof store.subscribe === "function") {
-          this._unsubscribe[key] = store.subscribe(handleStateChange);
+          this.stores[key].unsubscribe = store.subscribe(handleStateChange);
         } else {
           reject(new Error("Unsupported store type"));
           return;
@@ -233,7 +251,7 @@ class ReactAdapter extends StoreAdapter {
 
         // Resolve immediately after subscription is set up
         if (options.syncTabs) {
-          this._registerOnDataChanged(store);
+          this._registerOnDataChanged(key);
         }
         resolve(true);
       });
@@ -327,7 +345,6 @@ class ReactAdapter extends StoreAdapter {
     }
 
     // Check if it's a Jotai atom
-    console.log("STORE>>", store);
     if (
       Array.isArray(store) &&
       store.length === 2 &&

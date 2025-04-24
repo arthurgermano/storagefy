@@ -1,0 +1,14 @@
+Test Changes
+root folder run: npm run test
+
+Build Project Source Code
+root folder run: npm run build
+
+Build Docs
+docsCode folder run: npm run deploy
+
+Test Docs
+docsCode folder run: npm run preview
+
+Change version
+package.json change version
