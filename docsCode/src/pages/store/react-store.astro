@@ -1,5 +1,5 @@
 ---
-import Layout from '../../layouts/Layout.astro';
+import Layout from "../../layouts/Layout.astro";
 import STRGF_ShoppingDemoRedux from "../../components/react/STRGF_ShoppingDemoRedux.jsx";
 import STRFG_ShoppingDemoJotai from "../../components/react/STRFG_ShoppingDemoJotai.jsx";
 import STRFG_ShoppingDemoZustand from "../../components/react/STRFG_ShoppingDemoZustand.jsx";
@@ -10,19 +10,22 @@ import STRFG_ShoppingDemoZustand from "../../components/react/STRFG_ShoppingDemo
     <section class="strf-section">
       <h1>React Store Adapter</h1>
       <p>
-        Storagefy's React adapter provides seamless persistence for your React state management solutions. 
-        Compatible with popular libraries like Redux, Zustand, Jotai, and custom stores, this adapter synchronizes 
-        your application state with your chosen storage backend across page reloads and browser sessions.
+        Storagefy's React adapter provides seamless persistence for your React
+        state management solutions. Compatible with popular libraries like
+        Redux, Zustand, Jotai, and custom stores, this adapter synchronizes your
+        application state with your chosen storage backend across page reloads
+        and browser sessions.
       </p>
     </section>
 
     <section class="strf-section">
       <h2>1. Basic Usage</h2>
       <p>
-        The React adapter works with various React state management solutions, making it easy to persist 
-        your application state:
+        The React adapter works with various React state management solutions,
+        making it easy to persist your application state:
       </p>
-      <pre class="strf-code-block">
+      <pre
+        class="strf-code-block">
         <code>
 import &#123; startStoragefy, getReactAdapter &#125; from "storagefy";
 
@@ -41,7 +44,7 @@ const &#123; setInStorage, getFromStorage &#125; = getReactAdapter();
 await getFromStorage(store, "app-state"); // Always call this before setInStorage
 await setInStorage(store, "app-state", &#123;
   timeout: 86400000, // 24 hour expiration
-  ignoreKeys: ["temporaryData", "loadingStates"],
+  ignoreKeys: ["temporaryData", "user.password"],
   syncTabs: true
 &#125;);
         </code>
@@ -53,7 +56,8 @@ await setInStorage(store, "app-state", &#123;
       <p>
         For a more concise approach, use the <code>setReactStorage</code> helper function:
       </p>
-      <pre class="strf-code-block">
+      <pre
+        class="strf-code-block">
         <code>
 import &#123; startStoragefy, setReactStorage &#125; from "storagefy";
 
@@ -66,7 +70,7 @@ startStoragefy(&#123;
 // Use the helper function to simplify the process
 await setReactStorage(store, "app-state", &#123;
   timeout: 3600000, // 1 hour
-  ignoreKeys: ["_temp", "loading"],
+  ignoreKeys: ["_temp", "user.password"],
   syncTabs: true
 &#125;);
         </code>
@@ -88,9 +92,11 @@ await setReactStorage(store, "app-state", &#123;
     <section class="strf-section">
       <h2>4. Advanced Configuration</h2>
       <p>
-        You can directly instantiate the <code>ReactAdapter</code> class for more advanced control:
+        You can directly instantiate the <code>ReactAdapter</code> class for more
+        advanced control:
       </p>
-      <pre class="strf-code-block">
+      <pre
+        class="strf-code-block">
         <code>
 import &#123; ReactAdapter, IndexedDBAdapter &#125; from "storagefy";
 
@@ -106,7 +112,7 @@ const reactAdapter = new ReactAdapter(storageAdapter);
 // Connect with your store
 await reactAdapter.getFromStorage(store, "user-settings");
 await reactAdapter.setInStorage(store, "user-settings", &#123;
-  ignoreKeys: ["authToken"],
+  ignoreKeys: ["authToken", "user.password"],
   timeout: 604800000 // 1 week
 &#125;);
         </code>
@@ -116,15 +122,19 @@ await reactAdapter.setInStorage(store, "user-settings", &#123;
     <section class="strf-section">
       <h2>5. Supported State Management Libraries</h2>
       <p>
-        The React adapter is designed to work with multiple state management solutions:
+        The React adapter is designed to work with multiple state management
+        solutions:
       </p>
-      
+
       <div class="strf-store-types">
         <h3>Redux</h3>
         <p>
-          Works with standard Redux stores by utilizing <code>getState</code>, <code>dispatch</code>, and <code>subscribe</code> methods.
+          Works with standard Redux stores by utilizing <code>getState</code>, <code
+            >dispatch</code
+          >, and <code>subscribe</code> methods.
         </p>
-        <pre class="strf-code-block">
+        <pre
+          class="strf-code-block">
           <code>
 import &#123; createStore &#125; from 'redux';
 import &#123; startStoragefy, setReactStorage &#125; from "storagefy";
@@ -147,17 +157,21 @@ await setReactStorage(store, "redux-state");
           </code>
         </pre>
         <p>
-          Note: Your Redux reducer should handle the <code>SET_STATE_FROM_STORAGE</code> action type
-          for proper hydration from persistent storage.
+          Note: Your Redux reducer should handle the <code
+            >SET_STATE_FROM_STORAGE</code
+          > action type for proper hydration from persistent storage.
         </p>
       </div>
-      
+
       <div class="strf-store-types">
         <h3>Zustand</h3>
         <p>
-          Compatible with Zustand stores using <code>getState</code>, <code>setState</code>, and <code>subscribe</code> methods.
+          Compatible with Zustand stores using <code>getState</code>, <code
+            >setState</code
+          >, and <code>subscribe</code> methods.
         </p>
-        <pre class="strf-code-block">
+        <pre
+          class="strf-code-block">
           <code>
 import create from 'zustand';
 import &#123; startStoragefy, setReactStorage &#125; from "storagefy";
@@ -173,13 +187,15 @@ await setReactStorage(useStore, "zustand-state");
           </code>
         </pre>
       </div>
-      
+
       <div class="strf-store-types">
         <h3>Jotai</h3>
         <p>
-          Works with Jotai atom values using <code>get</code>, <code>set</code>, and subscription mechanisms.
+          Works with Jotai atom values using <code>get</code>, <code>set</code>,
+          and subscription mechanisms.
         </p>
-        <pre class="strf-code-block">
+        <pre
+          class="strf-code-block">
           <code>
 import &#123; atom, useAtom &#125; from 'jotai';
 import &#123; atomWithStorage &#125; from 'jotai/utils';
@@ -209,13 +225,15 @@ await setInStorage(jotaiStore, "jotai-state");
           </code>
         </pre>
       </div>
-      
+
       <div class="strf-store-types">
         <h3>Custom React State Hooks</h3>
         <p>
-          You can adapt custom React hooks or state management solutions by creating a compatible store interface.
+          You can adapt custom React hooks or state management solutions by
+          creating a compatible store interface.
         </p>
-        <pre class="strf-code-block">
+        <pre
+          class="strf-code-block">
           <code>
 import &#123; useState, useEffect &#125; from 'react';
 import &#123; startStoragefy, setReactStorage &#125; from "storagefy";
@@ -252,28 +270,85 @@ await setReactStorage(customStore, "custom-state");
       <p>
         The <code>setInStorage</code> method accepts the following options:
       </p>
-      
+
       <div class="strf-options">
         <h3>Options Object</h3>
         <ul>
           <li>
-            <code>ignoreKeys</code>: Array of store property keys to exclude from persistence
+            <code>ignoreKeys</code>: Array of store property keys to exclude
+            from persistence
             <p class="strf-option-desc">
-              Use this for sensitive data, temporary state, or large objects that shouldn't be persisted.
+              Use this for sensitive data or temporary state that doesn't need
+              persistence. Supports both flat keys and dot-notation paths for
+              nested properties at any depth.
+            </p>
+            <pre
+              class="strf-code-block">
+        <code>
+// Flat keys — exclude top-level properties
+ignoreKeys: ["password", "token"]
+
+// Nested keys — exclude properties inside objects (dot notation)
+ignoreKeys: ["auth.password", "auth.token"]
+
+// Deeply nested — works at any depth
+ignoreKeys: ["config.api.secretKey", "config.api.privateToken"]
+
+// Mixed — combine flat and nested freely
+ignoreKeys: [
+  "sessionToken",           // flat
+  "auth.password",          // nested
+  "config.api.secretKey"    // deeply nested
+]
+        </code>
+      </pre>
+            <p class="strf-option-desc">
+              Ignored keys are set to <code>undefined</code> in the persisted value.
+              Sibling and parent keys are never affected — only the exact path specified
+              is omitted.
             </p>
           </li>
+
           <li>
             <code>timeout</code>: Expiration duration in milliseconds
             <p class="strf-option-desc">
-              After this duration, the stored data will be considered expired and removed.
+              After this duration, the stored data will be considered expired
+              and removed. If not set, data persists indefinitely.
             </p>
+            <pre
+              class="strf-code-block">
+        <code>
+timeout: 3600000  // expires after 1 hour
+timeout: 86400000 // expires after 24 hours
+timeout: 300000   // expires after 5 minutes
+        </code>
+      </pre>
           </li>
+
           <li>
-            <code>syncTabs</code>: Boolean flag to enable cross-tab synchronization
+            <code>syncTabs</code>: Boolean flag to enable cross-tab
+            synchronization
             <p class="strf-option-desc">
-              When true, changes made in one browser tab will be reflected in all others.
-              Requires <code>channelName</code> to be set during <code>startStoragefy</code>.
+              When <code>true</code>, changes made in one browser tab will be
+              reflected in all others in real time. Requires <code
+                >channelName</code
+              >
+              to be set during <code>startStoragefy</code>.
             </p>
+            <pre
+              class="strf-code-block">
+        <code>
+// Enable tab sync
+startStoragefy(&#123;
+  dbName: "my-app",
+  channelName: "storagefy-sync" // required for syncTabs to work
+&#125;);
+
+await setInStorage(myStore, "user", &#123;
+  syncTabs: true
+&#125;);
+        </code>
+      </pre>
           </li>
         </ul>
       </div>
@@ -282,10 +357,12 @@ await setReactStorage(customStore, "custom-state");
     <section class="strf-section">
       <h2>7. Cross-Tab Synchronization</h2>
       <p>
-        The React adapter supports real-time synchronization of state across multiple browser tabs:
+        The React adapter supports real-time synchronization of state across
+        multiple browser tabs:
       </p>
-      
-      <pre class="strf-code-block">
+
+      <pre
+        class="strf-code-block">
         <code>
 // Initialize with channel name for cross-tab communication
 startStoragefy(&#123;
@@ -302,51 +379,64 @@ await setReactStorage(store, "shared-state", &#123;
 // Now changes to this store in one tab will be reflected in other tabs
         </code>
       </pre>
-      
+
       <p>
-        The synchronization uses the <code>BroadcastChannel</code> API under the hood and
-        intelligently handles different store types to apply updates appropriately.
+        The synchronization uses the <code>BroadcastChannel</code> API under the hood
+        and intelligently handles different store types to apply updates appropriately.
       </p>
     </section>
-    
+
     <section class="strf-section">
       <h2>8. API Reference</h2>
-      
+
       <div class="strf-api-method">
         <h3><code>getReactAdapter([options])</code></h3>
-        <p>
-          Returns a configured React adapter instance. Options include:
-        </p>
+        <p>Returns a configured React adapter instance. Options include:</p>
         <ul>
-          <li><code>adapterParams</code>: Configuration for the underlying storage adapter</li>
+          <li>
+            <code>adapterParams</code>: Configuration for the underlying storage
+            adapter
+          </li>
         </ul>
-        <p>Returns: <code>&#123; setInStorage, getFromStorage &#125;</code> methods</p>
+        <p>
+          Returns: <code>&#123; setInStorage, getFromStorage &#125;</code> methods
+        </p>
       </div>
-      
+
       <div class="strf-api-method">
         <h3><code>setReactStorage(store, key, [options])</code></h3>
         <p>
-          Helper function that internally calls <code>getFromStorage</code> followed by <code>setInStorage</code>.
+          Helper function that internally calls <code>getFromStorage</code> followed
+          by <code>setInStorage</code>.
         </p>
         <ul>
-          <li><code>store</code>: React state store instance (Redux, Zustand, etc.)</li>
+          <li>
+            <code>store</code>: React state store instance (Redux, Zustand,
+            etc.)
+          </li>
           <li><code>key</code>: Storage key string</li>
-          <li><code>options</code>: Configuration options (ignoreKeys, timeout, syncTabs)</li>
+          <li>
+            <code>options</code>: Configuration options (ignoreKeys, timeout,
+            syncTabs)
+          </li>
         </ul>
         <p>Returns: Promise resolving to true on success</p>
       </div>
-      
+
       <div class="strf-api-method">
         <h3><code>ReactAdapter</code> Class Methods</h3>
         <ul>
           <li>
-            <code>setInStorage(store, key, options)</code>: Persists store state and sets up subscription
+            <code>setInStorage(store, key, options)</code>: Persists store state
+            and sets up subscription
           </li>
           <li>
-            <code>getFromStorage(store, key)</code>: Loads persisted state into store
+            <code>getFromStorage(store, key)</code>: Loads persisted state into
+            store
           </li>
           <li>
-            <code>destroy()</code>: Cleans up subscriptions when adapter is no longer needed
+            <code>destroy()</code>: Cleans up subscriptions when adapter is no
+            longer needed
           </li>
         </ul>
       </div>
@@ -356,25 +446,34 @@ await setReactStorage(store, "shared-state", &#123;
       <h2>9. Best Practices</h2>
       <ul>
         <li>
-          Always call <code>getFromStorage</code> before <code>setInStorage</code> to hydrate your store with existing data
+          Always call <code>getFromStorage</code> before <code
+            >setInStorage</code
+          > to hydrate your store with existing data
         </li>
         <li>
-          For Redux stores, ensure your reducer handles the <code>SET_STATE_FROM_STORAGE</code> action type
+          For Redux stores, ensure your reducer handles the <code
+            >SET_STATE_FROM_STORAGE</code
+          > action type
         </li>
         <li>
-          Use <code>ignoreKeys</code> for sensitive information, temporary UI state, or large objects
+          Use <code>ignoreKeys</code> for sensitive information, temporary UI state,
+          or large objects
         </li>
         <li>
-          Set appropriate <code>timeout</code> values based on the nature of your data
+          Set appropriate <code>timeout</code> values based on the nature of your
+          data
         </li>
         <li>
-          When using <code>syncTabs</code>, be mindful of complex state mutations that could conflict across tabs
+          When using <code>syncTabs</code>, be mindful of complex state
+          mutations that could conflict across tabs
         </li>
         <li>
-          Call <code>destroy()</code> on the adapter instance when unmounting components to avoid memory leaks
+          Call <code>destroy()</code> on the adapter instance when unmounting components
+          to avoid memory leaks
         </li>
         <li>
-          Consider using separate storage keys for different logical parts of your application state
+          Consider using separate storage keys for different logical parts of
+          your application state
         </li>
       </ul>
     </section>

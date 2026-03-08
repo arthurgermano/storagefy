@@ -6,7 +6,7 @@ import { sleep } from "misc-helpers";
 import { createStore as createReduxStore } from "redux";
 import { create } from "zustand";
 import { atom, createStore as createJotaiInternalStore } from "jotai";
-import React from "react";
+import React from "react"; // tem que manter por causa das dependencias
 
 import LocalStorageAdapter from "../../src/adapters/LocalStorageAdapter.js";
 import SessionStorageAdapter from "../../src/adapters/SessionStorageAdapter.js";

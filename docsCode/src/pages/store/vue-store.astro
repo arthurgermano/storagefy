@@ -44,7 +44,7 @@ const userStore = useUserStore();
 await getFromStorage(userStore, "user"); // Always call this before setInStorage
 await setInStorage(userStore, "user", &#123;
   timeout: 3600000, // 1 hour expiration
-  ignoreKeys: ["tempData", "password"],
+  ignoreKeys: ["tempData", "user.password"],
   syncTabs: true
 &#125;);
         </code>
@@ -54,8 +54,7 @@ await setInStorage(userStore, "user", &#123;
     <section class="strf-section">
       <h2>2. Using the Helper Function</h2>
       <p>
-        For a more concise approach, use the <code>setPiniaStorage</code> helper
-        function:
+        For a more concise approach, use the <code>setPiniaStorage</code> helper function:
       </p>
       <pre
         class="strf-code-block">
@@ -72,7 +71,7 @@ startStoragefy(&#123;
 const userStore = useUserStore();
 await setPiniaStorage(userStore, "user", &#123;
   timeout: 86400000, // 24 hours
-  ignoreKeys: ["sessionToken"],
+  ignoreKeys: ["sessionToken", "user.password"],
   syncTabs: true
 &#125;);
         </code>
@@ -108,7 +107,7 @@ const piniaAdapter = new PiniaAdapter(storageAdapter);
 const settingsStore = useSettingsStore();
 await piniaAdapter.getFromStorage(settingsStore, "app-settings");
 await piniaAdapter.setInStorage(settingsStore, "app-settings", &#123;
-  ignoreKeys: ["tempSettings"],
+  ignoreKeys: ["tempSettings", "user.password"],
   timeout: 604800000 // 1 week
 &#125;);
         </code>
@@ -129,25 +128,76 @@ await piniaAdapter.setInStorage(settingsStore, "app-settings", &#123;
             from persistence
             <p class="strf-option-desc">
               Use this for sensitive data or temporary state that doesn't need
-              persistence.
+              persistence. Supports both flat keys and dot-notation paths for
+              nested properties at any depth.
+            </p>
+            <pre
+              class="strf-code-block">
+        <code>
+// Flat keys — exclude top-level properties
+ignoreKeys: ["password", "token"]
+
+// Nested keys — exclude properties inside objects (dot notation)
+ignoreKeys: ["auth.password", "auth.token"]
+
+// Deeply nested — works at any depth
+ignoreKeys: ["config.api.secretKey", "config.api.privateToken"]
+
+// Mixed — combine flat and nested freely
+ignoreKeys: [
+  "sessionToken",           // flat
+  "auth.password",          // nested
+  "config.api.secretKey"    // deeply nested
+]
+        </code>
+      </pre>
+            <p class="strf-option-desc">
+              Ignored keys are set to <code>undefined</code> in the persisted value.
+              Sibling and parent keys are never affected — only the exact path specified
+              is omitted.
             </p>
           </li>
+
           <li>
             <code>timeout</code>: Expiration duration in milliseconds
             <p class="strf-option-desc">
               After this duration, the stored data will be considered expired
-              and removed.
+              and removed. If not set, data persists indefinitely.
             </p>
+            <pre
+              class="strf-code-block">
+        <code>
+timeout: 3600000  // expires after 1 hour
+timeout: 86400000 // expires after 24 hours
+timeout: 300000   // expires after 5 minutes
+        </code>
+      </pre>
           </li>
+
           <li>
             <code>syncTabs</code>: Boolean flag to enable cross-tab
             synchronization
             <p class="strf-option-desc">
-              When true, changes made in one browser tab will be reflected in
-              all others. Requires <code>channelName</code> to be set during <code
-                >startStoragefy</code
-              >.
+              When <code>true</code>, changes made in one browser tab will be
+              reflected in all others in real time. Requires <code
+                >channelName</code
+              >
+              to be set during <code>startStoragefy</code>.
             </p>
+            <pre
+              class="strf-code-block">
+        <code>
+// Enable tab sync
+startStoragefy(&#123;
+  dbName: "my-app",
+  channelName: "storagefy-sync" // required for syncTabs to work
+&#125;);
+
+await setInStorage(myStore, "user", &#123;
+  syncTabs: true
+&#125;);
+        </code>
+      </pre>
           </li>
         </ul>
       </div>
