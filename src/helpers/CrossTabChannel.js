@@ -1,5 +1,5 @@
 import { logError, logWarn, logInfo } from "./loggerHelper.js";
-import generateSimpleId from "misc-helpers/src/utils/generateSimpleId.js";
+import { generateSimpleId } from "misc-helpers";
 
 // ------------------------------------------------------------------------------------------------
 

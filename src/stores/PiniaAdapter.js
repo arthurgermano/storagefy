@@ -1,6 +1,6 @@
 import StoreAdapter from "./StoreAdapter.js";
-import assign from "misc-helpers/src/utils/assign.js";
-import { logError, logWarn, logInfo } from "../helpers/loggerHelper.js";
+import { assign } from "misc-helpers";
+import { logError, logInfo } from "../helpers/loggerHelper.js";
 
 // ------------------------------------------------------------------------------------------------
 
@@ -152,12 +152,7 @@ class PiniaAdapter extends StoreAdapter {
                 return resolve(true);
               }
 
-              const stateProps = { ...state };
-              for (let propKey in stateProps) {
-                if (options.ignoreKeys.includes(propKey)) {
-                  stateProps[propKey] = undefined;
-                }
-              }
+              const stateProps = this.omitKeys(state, options.ignoreKeys);
 
               await this.adapter.set(key, stateProps, options.timeout);
 

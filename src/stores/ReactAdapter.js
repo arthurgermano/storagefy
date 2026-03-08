@@ -1,6 +1,6 @@
 import StoreAdapter from "./StoreAdapter.js";
-import assign from "misc-helpers/src/utils/assign.js";
-import { logError, logWarn, logInfo } from "../helpers/loggerHelper.js";
+import { assign } from "misc-helpers";
+import { logError, logInfo } from "../helpers/loggerHelper.js";
 
 // ------------------------------------------------------------------------------------------------
 
@@ -142,8 +142,8 @@ class ReactAdapter extends StoreAdapter {
           typeof store.getState === "function"
             ? store.getState()
             : typeof store.get === "function"
-            ? store.get()
-            : {};
+              ? store.get()
+              : {};
 
         if (JSON.stringify(currentState) === JSON.stringify(dataToPatch)) {
           return;
@@ -214,12 +214,7 @@ class ReactAdapter extends StoreAdapter {
               return resolve(true);
             }
 
-            const stateProps = { ...state };
-            for (let propKey in stateProps) {
-              if (options.ignoreKeys.includes(propKey)) {
-                stateProps[propKey] = undefined;
-              }
-            }
+            const stateProps = this.omitKeys(state, options.ignoreKeys);
 
             await this.adapter.set(key, stateProps, options.timeout);
           } catch (error) {
@@ -299,7 +294,7 @@ class ReactAdapter extends StoreAdapter {
         store.setState(assign({}, storage));
       } else {
         throw new Error(
-          "Cannot update store: setState or dispatch method not found"
+          "Cannot update store: setState or dispatch method not found",
         );
       }
 
@@ -371,10 +366,10 @@ class ReactAdapter extends StoreAdapter {
 
     if (!hasGetState && !hasSetState) {
       logError(
-        "Store must have either getState/setState or _getState/_setState methods"
+        "Store must have either getState/setState or _getState/_setState methods",
       );
       throw new Error(
-        "Store must have either getState/setState or _getState/_setState methods"
+        "Store must have either getState/setState or _getState/_setState methods",
       );
     }
   }

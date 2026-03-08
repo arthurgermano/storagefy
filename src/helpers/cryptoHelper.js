@@ -1,6 +1,5 @@
-import { logError, logWarn, logInfo } from "./loggerHelper.js";
-import base64To from "misc-helpers/src/utils/base64To.js";
-import base64From from "misc-helpers/src/utils/base64From.js";
+import { logError, logInfo } from "./loggerHelper.js";
+import { base64To, base64From } from "misc-helpers";
 
 // ------------------------------------------------------------------------------------------------
 
@@ -99,7 +98,7 @@ export const deriveKey = async (password, salt, extractable = false) => {
       keyMaterial,
       { name: "AES-GCM", length: 256 },
       extractable,
-      ["encrypt", "decrypt"]
+      ["encrypt", "decrypt"],
     );
   } catch (error) {
     logError("Error deriving key:", error);
@@ -132,7 +131,7 @@ export const encryptData = async (key, dataObj, raw = false) => {
     const encrypted = await subtle.encrypt(
       { name: "AES-GCM", iv },
       key,
-      encoded
+      encoded,
     );
 
     if (raw) {
@@ -141,7 +140,7 @@ export const encryptData = async (key, dataObj, raw = false) => {
 
     const ivBase64 = base64To(String.fromCharCode(...iv));
     const encryptedBase64 = base64To(
-      String.fromCharCode(...new Uint8Array(encrypted))
+      String.fromCharCode(...new Uint8Array(encrypted)),
     );
 
     return { iv: ivBase64, data: encryptedBase64 };
@@ -174,7 +173,7 @@ export const decryptData = async (key, encryptedObj, raw = false) => {
         new Uint8Array(
           base64From(b64)
             .split("")
-            .map((char) => char.charCodeAt(0))
+            .map((char) => char.charCodeAt(0)),
         );
       iv = decodeBase64(encryptedObj.iv);
       encrypted = decodeBase64(encryptedObj.data);
@@ -183,7 +182,7 @@ export const decryptData = async (key, encryptedObj, raw = false) => {
     const decrypted = await subtle.decrypt(
       { name: "AES-GCM", iv },
       key,
-      encrypted
+      encrypted,
     );
 
     return JSON.parse(DECODER.decode(decrypted));

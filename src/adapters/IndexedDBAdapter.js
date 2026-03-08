@@ -16,9 +16,8 @@
  */
 
 import StorageAdapter from "./StorageAdapter.js";
-import sleep from "misc-helpers/src/utils/sleep.js";
-import generateSimpleId from "misc-helpers/src/utils/generateSimpleId.js";
-import { logError, logWarn, logInfo } from "../helpers/loggerHelper.js";
+import { sleep, generateSimpleId } from "misc-helpers";
+import { logError, logInfo } from "../helpers/loggerHelper.js";
 import { simpleDeobfuscate } from "../helpers/cryptoHelper.js";
 
 // -------------------------------------------------------------------------------------------------
@@ -77,7 +76,7 @@ class IndexedDBAdapter extends StorageAdapter {
     window.addEventListener("beforeunload", this._unloadHandler);
 
     logInfo(
-      `IndexedDBAdapter - initialized with dbName: ${dbName}, storeName: ${this.storeName}`
+      `IndexedDBAdapter - initialized with dbName: ${dbName}, storeName: ${this.storeName}`,
     );
   }
 
@@ -94,7 +93,7 @@ class IndexedDBAdapter extends StorageAdapter {
    */
   _initDB({ dbName, version, description }) {
     logInfo(
-      `IndexedDBAdapter -Initializing IndexedDB with dbName: ${dbName}, storeName: ${this.storeName}`
+      `IndexedDBAdapter -Initializing IndexedDB with dbName: ${dbName}, storeName: ${this.storeName}`,
     );
     this.dbPromise = new Promise((resolve, reject) => {
       const request = indexedDB.open(dbName, version);
@@ -161,7 +160,7 @@ class IndexedDBAdapter extends StorageAdapter {
    */
   async waitReadiness(timeout = 50, tries = 20) {
     logInfo(
-      `IndexedDBAdapter - Waiting for database readiness with timeout: ${timeout}ms, tries: ${tries}`
+      `IndexedDBAdapter - Waiting for database readiness with timeout: ${timeout}ms, tries: ${tries}`,
     );
     return new Promise(async (resolve, reject) => {
       let attempt = 0;
@@ -525,7 +524,7 @@ class IndexedDBAdapter extends StorageAdapter {
   async setExpire(key, timestamp) {
     try {
       logInfo(
-        `IndexedDBAdapter - Setting expire for key: ${key}, timestamp: ${timestamp}`
+        `IndexedDBAdapter - Setting expire for key: ${key}, timestamp: ${timestamp}`,
       );
       const expires = await this._loadExpires();
       expires[key] = timestamp;
@@ -597,7 +596,7 @@ class IndexedDBAdapter extends StorageAdapter {
           return new Promise((resolve) => {
             const request = store.put(
               JSON.stringify(currentExpires),
-              this.expireKey
+              this.expireKey,
             );
             request.onsuccess = () => resolve();
             request.onerror = () => resolve();

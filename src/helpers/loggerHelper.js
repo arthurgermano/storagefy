@@ -3,7 +3,7 @@
  * Set to `true` to enable logging.
  * @type {boolean}
  */
-globalThis.storagefyDebug = true;
+globalThis.storagefyDebug = false;
 
 /**
  * Global debug level.

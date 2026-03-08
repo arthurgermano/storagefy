@@ -1,7 +1,7 @@
 import StorageAdapter from "./StorageAdapter.js";
-import generateSimpleId from "misc-helpers/src/utils/generateSimpleId.js";
+import { generateSimpleId } from "misc-helpers";
 import { simpleDeobfuscate } from "../helpers/cryptoHelper.js";
-import { logError, logWarn, logInfo } from "../helpers/loggerHelper.js";
+import { logError, logInfo } from "../helpers/loggerHelper.js";
 
 // -------------------------------------------------------------------------------------------------
 

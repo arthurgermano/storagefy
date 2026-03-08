@@ -1,15 +1,11 @@
-import base64To from 'misc-helpers/src/utils/base64To.js';
-import base64From from 'misc-helpers/src/utils/base64From.js';
-import generateSimpleId from 'misc-helpers/src/utils/generateSimpleId.js';
-import sleep from 'misc-helpers/src/utils/sleep.js';
-import assign from 'misc-helpers/src/utils/assign.js';
+import { base64From, base64To, generateSimpleId, sleep, assign } from 'misc-helpers';
 
 /**
  * Global debug flag.
  * Set to `true` to enable logging.
  * @type {boolean}
  */
-globalThis.storagefyDebug = true;
+globalThis.storagefyDebug = false;
 
 /**
  * Global debug level.
@@ -166,7 +162,7 @@ const deriveKey = async (password, salt, extractable = false) => {
       keyMaterial,
       { name: "AES-GCM", length: 256 },
       extractable,
-      ["encrypt", "decrypt"]
+      ["encrypt", "decrypt"],
     );
   } catch (error) {
     logError$1("Error deriving key:", error);
@@ -199,7 +195,7 @@ const encryptData = async (key, dataObj, raw = false) => {
     const encrypted = await subtle.encrypt(
       { name: "AES-GCM", iv },
       key,
-      encoded
+      encoded,
     );
 
     if (raw) {
@@ -208,7 +204,7 @@ const encryptData = async (key, dataObj, raw = false) => {
 
     const ivBase64 = base64To(String.fromCharCode(...iv));
     const encryptedBase64 = base64To(
-      String.fromCharCode(...new Uint8Array(encrypted))
+      String.fromCharCode(...new Uint8Array(encrypted)),
     );
 
     return { iv: ivBase64, data: encryptedBase64 };
@@ -241,7 +237,7 @@ const decryptData = async (key, encryptedObj, raw = false) => {
         new Uint8Array(
           base64From(b64)
             .split("")
-            .map((char) => char.charCodeAt(0))
+            .map((char) => char.charCodeAt(0)),
         );
       iv = decodeBase64(encryptedObj.iv);
       encrypted = decodeBase64(encryptedObj.data);
@@ -250,7 +246,7 @@ const decryptData = async (key, encryptedObj, raw = false) => {
     const decrypted = await subtle.decrypt(
       { name: "AES-GCM", iv },
       key,
-      encrypted
+      encrypted,
     );
 
     return JSON.parse(DECODER.decode(decrypted));
@@ -853,7 +849,7 @@ class IndexedDBAdapter extends StorageAdapter {
     window.addEventListener("beforeunload", this._unloadHandler);
 
     logInfo(
-      `IndexedDBAdapter - initialized with dbName: ${dbName}, storeName: ${this.storeName}`
+      `IndexedDBAdapter - initialized with dbName: ${dbName}, storeName: ${this.storeName}`,
     );
   }
 
@@ -870,7 +866,7 @@ class IndexedDBAdapter extends StorageAdapter {
    */
   _initDB({ dbName, version, description }) {
     logInfo(
-      `IndexedDBAdapter -Initializing IndexedDB with dbName: ${dbName}, storeName: ${this.storeName}`
+      `IndexedDBAdapter -Initializing IndexedDB with dbName: ${dbName}, storeName: ${this.storeName}`,
     );
     this.dbPromise = new Promise((resolve, reject) => {
       const request = indexedDB.open(dbName, version);
@@ -937,7 +933,7 @@ class IndexedDBAdapter extends StorageAdapter {
    */
   async waitReadiness(timeout = 50, tries = 20) {
     logInfo(
-      `IndexedDBAdapter - Waiting for database readiness with timeout: ${timeout}ms, tries: ${tries}`
+      `IndexedDBAdapter - Waiting for database readiness with timeout: ${timeout}ms, tries: ${tries}`,
     );
     return new Promise(async (resolve, reject) => {
       let attempt = 0;
@@ -1301,7 +1297,7 @@ class IndexedDBAdapter extends StorageAdapter {
   async setExpire(key, timestamp) {
     try {
       logInfo(
-        `IndexedDBAdapter - Setting expire for key: ${key}, timestamp: ${timestamp}`
+        `IndexedDBAdapter - Setting expire for key: ${key}, timestamp: ${timestamp}`,
       );
       const expires = await this._loadExpires();
       expires[key] = timestamp;
@@ -1373,7 +1369,7 @@ class IndexedDBAdapter extends StorageAdapter {
           return new Promise((resolve) => {
             const request = store.put(
               JSON.stringify(currentExpires),
-              this.expireKey
+              this.expireKey,
             );
             request.onsuccess = () => resolve();
             request.onerror = () => resolve();
@@ -1437,7 +1433,7 @@ class LocalStorageAdapter extends StorageAdapter {
     window.addEventListener("beforeunload", this._unloadHandler);
 
     logInfo(
-      `LocalStorageAdapter -  initialized with dbName: ${dbName}, version: ${version}, encrypt: ${encrypt}, description: ${description}`
+      `LocalStorageAdapter -  initialized with dbName: ${dbName}, version: ${version}, encrypt: ${encrypt}, description: ${description}`,
     );
   }
 
@@ -1454,7 +1450,7 @@ class LocalStorageAdapter extends StorageAdapter {
   _initMeta({ dbName, version, description }) {
     try {
       logInfo(
-        "LocalStorageAdapter - Initializing metadata for LocalStorageAdapter"
+        "LocalStorageAdapter - Initializing metadata for LocalStorageAdapter",
       );
       const meta = {
         dbName,
@@ -1738,7 +1734,7 @@ class LocalStorageAdapter extends StorageAdapter {
       if (changed) {
         localStorage.setItem(
           this.expireKey,
-          JSON.stringify(this._loadExpires())
+          JSON.stringify(this._loadExpires()),
         );
       }
     } catch (err) {
@@ -2126,7 +2122,7 @@ class SessionStorageAdapter extends StorageAdapter {
  *   async setInStorage(store, key, options) {
  *     // Implementation here
  *   }
- *   
+ *
  *   async getFromStorage(store, key) {
  *     // Implementation here
  *   }
@@ -2178,7 +2174,7 @@ class StoreAdapter {
   }
 
   // ----------------------------------------------------------------------------------------------
-  
+
   /**
    * Cleans up resources and subscriptions when the adapter is no longer needed.
    * Should be called before discarding the adapter instance.
@@ -2187,13 +2183,64 @@ class StoreAdapter {
    * adapter.destroy();
    */
   destroy(key) {
-    if (this.stores && this.stores[key] && typeof this.stores[key].unsubscribe === "function") {
+    if (
+      this.stores &&
+      this.stores[key] &&
+      typeof this.stores[key].unsubscribe === "function"
+    ) {
       logInfo("StoreAdapter - destroy - Unsubscribing from store changes.");
-      this.stores[key].unsubscribe;
+      this.stores[key].unsubscribe();
       delete this.stores[key];
       return;
     }
     logInfo("StoreAdapter - destroy - No unsubscribe function to call.");
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * Recursively omits keys from an object based on an array of dot-notation key paths.
+   * Maintains full backward compatibility with flat key names.
+   *
+   * @param {Object} obj The object to process
+   * @param {string[]} ignoreKeys Array of keys to omit. Supports dot-notation for nested keys.
+   * @returns {Object} A new object with the specified keys set to undefined
+   * @example
+   * // Flat keys (original behavior)
+   * omitKeys({ password: '123', name: 'John' }, ['password'])
+   * // => { password: undefined, name: 'John' }
+   *
+   * // Nested keys
+   * omitKeys({ user: { password: '123', name: 'John' } }, ['user.password'])
+   * // => { user: { password: undefined, name: 'John' } }
+   *
+   * // Mixed
+   * omitKeys({ token: 'abc', user: { password: '123' } }, ['token', 'user.password'])
+   * // => { token: undefined, user: { password: undefined } }
+   */
+  omitKeys(obj, ignoreKeys) {
+    if (!obj || typeof obj !== "object" || !ignoreKeys?.length) return obj;
+
+    const result = Array.isArray(obj) ? [...obj] : assign({}, obj);
+
+    for (const key of Object.keys(result)) {
+      // flat key — comportamento original mantido
+      if (ignoreKeys.includes(key)) {
+        result[key] = undefined;
+        continue;
+      }
+
+      // chaves aninhadas com notação de ponto: "user.password"
+      const nestedKeys = ignoreKeys
+        .filter((k) => k.startsWith(key + "."))
+        .map((k) => k.slice(key.length + 1));
+
+      if (nestedKeys.length && result[key] && typeof result[key] === "object") {
+        result[key] = this.omitKeys(result[key], nestedKeys);
+      }
+    }
+
+    return result;
   }
 }
 
@@ -2349,12 +2396,7 @@ class PiniaAdapter extends StoreAdapter {
                 return resolve(true);
               }
 
-              const stateProps = { ...state };
-              for (let propKey in stateProps) {
-                if (options.ignoreKeys.includes(propKey)) {
-                  stateProps[propKey] = undefined;
-                }
-              }
+              const stateProps = this.omitKeys(state, options.ignoreKeys);
 
               await this.adapter.set(key, stateProps, options.timeout);
 
@@ -2551,8 +2593,8 @@ class ReactAdapter extends StoreAdapter {
           typeof store.getState === "function"
             ? store.getState()
             : typeof store.get === "function"
-            ? store.get()
-            : {};
+              ? store.get()
+              : {};
 
         if (JSON.stringify(currentState) === JSON.stringify(dataToPatch)) {
           return;
@@ -2623,12 +2665,7 @@ class ReactAdapter extends StoreAdapter {
               return resolve(true);
             }
 
-            const stateProps = { ...state };
-            for (let propKey in stateProps) {
-              if (options.ignoreKeys.includes(propKey)) {
-                stateProps[propKey] = undefined;
-              }
-            }
+            const stateProps = this.omitKeys(state, options.ignoreKeys);
 
             await this.adapter.set(key, stateProps, options.timeout);
           } catch (error) {
@@ -2708,7 +2745,7 @@ class ReactAdapter extends StoreAdapter {
         store.setState(assign({}, storage));
       } else {
         throw new Error(
-          "Cannot update store: setState or dispatch method not found"
+          "Cannot update store: setState or dispatch method not found",
         );
       }
 
@@ -2780,10 +2817,10 @@ class ReactAdapter extends StoreAdapter {
 
     if (!hasGetState && !hasSetState) {
       logError$1(
-        "Store must have either getState/setState or _getState/_setState methods"
+        "Store must have either getState/setState or _getState/_setState methods",
       );
       throw new Error(
-        "Store must have either getState/setState or _getState/_setState methods"
+        "Store must have either getState/setState or _getState/_setState methods",
       );
     }
   }
@@ -2938,13 +2975,7 @@ class SvelteAdapter extends StoreAdapter {
               return resolve(true);
             }
 
-            const stateProps = { ...state };
-            for (let propKey in stateProps) {
-              if (options.ignoreKeys.includes(propKey)) {
-                stateProps[propKey] = undefined;
-              }
-            }
-
+            const stateProps = this.omitKeys(state, options.ignoreKeys);
             await this.adapter.set(key, stateProps, options.timeout);
             return resolve(true);
           } catch (error) {

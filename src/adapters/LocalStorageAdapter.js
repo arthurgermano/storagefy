@@ -1,5 +1,5 @@
 import StorageAdapter from "./StorageAdapter.js";
-import generateSimpleId from "misc-helpers/src/utils/generateSimpleId.js";
+import { generateSimpleId } from "misc-helpers";
 import { logError, logWarn, logInfo } from "../helpers/loggerHelper.js";
 import { simpleDeobfuscate } from "../helpers/cryptoHelper.js";
 
@@ -52,7 +52,7 @@ class LocalStorageAdapter extends StorageAdapter {
     window.addEventListener("beforeunload", this._unloadHandler);
 
     logInfo(
-      `LocalStorageAdapter -  initialized with dbName: ${dbName}, version: ${version}, encrypt: ${encrypt}, description: ${description}`
+      `LocalStorageAdapter -  initialized with dbName: ${dbName}, version: ${version}, encrypt: ${encrypt}, description: ${description}`,
     );
   }
 
@@ -69,7 +69,7 @@ class LocalStorageAdapter extends StorageAdapter {
   _initMeta({ dbName, version, description }) {
     try {
       logInfo(
-        "LocalStorageAdapter - Initializing metadata for LocalStorageAdapter"
+        "LocalStorageAdapter - Initializing metadata for LocalStorageAdapter",
       );
       const meta = {
         dbName,
@@ -353,7 +353,7 @@ class LocalStorageAdapter extends StorageAdapter {
       if (changed) {
         localStorage.setItem(
           this.expireKey,
-          JSON.stringify(this._loadExpires())
+          JSON.stringify(this._loadExpires()),
         );
       }
     } catch (err) {
