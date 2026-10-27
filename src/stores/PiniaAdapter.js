@@ -82,7 +82,7 @@ class PiniaAdapter extends StoreAdapter {
         }
 
         if (
-          JSON.stringify(!this.stores[data.key].store.$state) ===
+          JSON.stringify(this.stores[data.key].store.$state) ===
           JSON.stringify(dataToPatch)
         ) {
           return;
@@ -109,6 +109,8 @@ class PiniaAdapter extends StoreAdapter {
    * @param {Object} [options={}] Configuration options
    * @param {string[]} [options.ignoreKeys=[]] Keys to exclude from persistence
    * @param {number} [options.timeout] Operation timeout in milliseconds
+   * @param {Function} [options.onError] Called with an Error on every write that fails (storage full, encryption
+   *   failure…) — the store keeps working, but its state was not saved
    * @returns {Promise<boolean>} Resolves to true on success
    * @throws {Error} Throws if store is invalid or persistence fails
    * @example
@@ -154,10 +156,14 @@ class PiniaAdapter extends StoreAdapter {
 
               const stateProps = this.omitKeys(state, options.ignoreKeys);
 
-              await this.adapter.set(key, stateProps, options.timeout);
+              const written = await this.adapter.set(key, stateProps, options.timeout);
+              if (written === false) {
+                this._reportWriteFailure(key, options);
+              }
 
               return resolve(true);
             } catch (error) {
+              this._reportWriteFailure(key, options, error);
               return reject(error);
             }
           }

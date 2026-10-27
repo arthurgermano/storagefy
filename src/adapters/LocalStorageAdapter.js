@@ -15,6 +15,7 @@ class LocalStorageAdapter extends StorageAdapter {
    * @param {string} options.dbName - The database namespace.
    * @param {number} [options.version=1] - The version of the storage schema.
    * @param {boolean} [options.encrypt=false] - Whether to encrypt stored values.
+   * @param {string} [options.password] - Secret of the app the encryption key is derived from (with the storage key as salt). Without it, the key comes from the storage key alone — readable by anyone who knows this library. Ignored when `encrypt` is false.
    * @param {number} [options.expireCheckInterval=1000] - Interval for expiration checks.
    * @param {string} [options.description=""] - Description of the storage instance.
    * @param {string} [options.channelName=false] - Optional channel name for cross-tab communication.
@@ -25,6 +26,7 @@ class LocalStorageAdapter extends StorageAdapter {
     dbName,
     version = 1,
     encrypt = false,
+    password = null,
     expireCheckInterval = 1000,
     description = "",
     channelName = false,
@@ -38,6 +40,7 @@ class LocalStorageAdapter extends StorageAdapter {
 
     this.dbName = dbName;
     this.encrypt = encrypt;
+    this._setPassword(password);
     this.expireKey = `STRGF_${dbName}__expires`;
     this.metaKey = `STRGF_${dbName}__meta`;
     this.prefix = `${dbName}__`;
@@ -143,7 +146,7 @@ class LocalStorageAdapter extends StorageAdapter {
       if (!key && !value) return false;
       const fullKey = this._fullKey(key);
       if (key && (value === undefined || value === null)) {
-        await this.delete(fullKey);
+        await this.delete(key);
         return null;
       }
       value = JSON.stringify(value);

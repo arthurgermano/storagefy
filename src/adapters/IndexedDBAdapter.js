@@ -35,6 +35,7 @@ class IndexedDBAdapter extends StorageAdapter {
    * @param {string} [config.storeName] Name of the object store (defaults to `${dbName}_store`)
    * @param {number} [config.version=1] Database version
    * @param {boolean} [config.encrypt=false] Whether to encrypt stored data
+   * @param {string} [config.password] - Secret of the app the encryption key is derived from (with the storage key as salt). Without it, the key comes from the storage key alone — readable by anyone who knows this library. Ignored when `encrypt` is false.
    * @param {number} [config.expireCheckInterval=1000] Interval for expiration checks in ms
    * @param {string} [config.description=""] Description of the database
    * @param {string} [config.channelName=false] - Optional channel name for cross-tab communication.
@@ -46,6 +47,7 @@ class IndexedDBAdapter extends StorageAdapter {
     storeName,
     version = 1,
     encrypt = false,
+    password = null,
     expireCheckInterval = 1000,
     channelName = false,
     enableSyncTabs = false,
@@ -61,6 +63,7 @@ class IndexedDBAdapter extends StorageAdapter {
     this.dbName = dbName;
     this.storeName = storeName || `${dbName}_store`;
     this.encrypt = encrypt;
+    this._setPassword(password);
     this.expireKey = `STRGF_${dbName}__expires`;
     this.metaKey = `STRGF_${dbName}__meta`;
     this.prefix = `${dbName}__`;
@@ -284,7 +287,7 @@ class IndexedDBAdapter extends StorageAdapter {
       }
       const fullKey = this._fullKey(key);
       if (key && (value === undefined || value === null)) {
-        await this.delete(fullKey);
+        await this.delete(key);
         return null;
       }
       value = JSON.stringify(value);

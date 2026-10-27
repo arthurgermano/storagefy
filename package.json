@@ -1,17 +1,22 @@
 {
   "name": "storagefy",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Framework-agnostic adapter system for syncing state libraries (Pinia, Zustand, Redux, Jotai, Svelte, etc.) with browser storage (localStorage, sessionStorage, IndexedDB).",
   "main": "dist/index.cjs",
   "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "types": "./dist/types/index.d.ts",
   "type": "module",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": "./dist/types/index.d.ts",
       "import": "./dist/index.js",
-      "require": "./dist/index.cjs",
-      "default": "./dist/index.js"
+      "require": "./dist/index.cjs"
     }
   },
   "devDependencies": {
@@ -31,7 +36,7 @@
   },
   "scripts": {
     "test": "vitest",
-    "build": "tsup"
+    "build": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\" && tsup && tsc -p tsconfig.types.json"
   },
   "repository": {
     "type": "git",
@@ -62,6 +67,6 @@
   },
   "homepage": "https://arthurgermano.github.io/storagefy/",
   "dependencies": {
-    "misc-helpers": "^2.1.0"
+    "misc-helpers": "^3.0.3"
   }
 }

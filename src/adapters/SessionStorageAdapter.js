@@ -17,6 +17,7 @@ class SessionStorageAdapter extends StorageAdapter {
    * @param {string} options.dbName - The namespace for storage keys.
    * @param {number} [options.version=1] - Schema version of the storage.
    * @param {boolean} [options.encrypt=false] - Whether to encrypt stored values.
+   * @param {string} [options.password] - Secret of the app the encryption key is derived from (with the storage key as salt). Without it, the key comes from the storage key alone — readable by anyone who knows this library. Ignored when `encrypt` is false.
    * @param {number} [options.expireCheckInterval=1000] - Interval to check for expired items (ms).
    * @param {string} [options.description=""] - Optional description metadata.
    * @param {string} [options.channelName=false] - Optional channel name for cross-tab communication.
@@ -27,6 +28,7 @@ class SessionStorageAdapter extends StorageAdapter {
     dbName,
     version = 1,
     encrypt = false,
+    password = null,
     expireCheckInterval = 1000,
     channelName = false,
     description = "",
@@ -40,6 +42,7 @@ class SessionStorageAdapter extends StorageAdapter {
 
     this.dbName = dbName;
     this.encrypt = encrypt;
+    this._setPassword(password);
 
     this.expireKey = `STRGF_${dbName}__expires`;
     this.metaKey = `STRGF_${dbName}__meta`;
@@ -146,7 +149,7 @@ class SessionStorageAdapter extends StorageAdapter {
 
       const fullKey = this._fullKey(key);
       if (key && (value === undefined || value === null)) {
-        await this.delete(fullKey);
+        await this.delete(key);
         return null;
       }
 

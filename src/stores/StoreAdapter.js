@@ -1,4 +1,4 @@
-import { logInfo } from "../helpers/loggerHelper.js";
+import { logError, logInfo } from "../helpers/loggerHelper.js";
 import { assign } from "misc-helpers";
 
 /**
@@ -73,6 +73,30 @@ class StoreAdapter {
    * @example
    * adapter.destroy();
    */
+  /**
+   * Tells that a write of the store to storage failed: the storage adapters never throw on a write — they answer
+   * false — so without this the app would never know its state was not saved. Calls `options.onError` when given; a
+   * callback that throws is logged, never passed on to the store.
+   * @protected
+   * @param {string} key - The storage key that was not saved.
+   * @param {{ onError?: Function }} options - The options given to setInStorage.
+   * @param {unknown} [cause] - The error thrown, when the write threw.
+   */
+  _reportWriteFailure(key, options, cause) {
+    const error = new Error(`Storagefy: could not save "${key}"`, cause === undefined ? undefined : { cause });
+    logError(error);
+    if (typeof options.onError !== "function") {
+      return;
+    }
+    try {
+      options.onError(error);
+    } catch (callbackError) {
+      logError("Storagefy: onError callback threw:", callbackError);
+    }
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
   destroy(key) {
     if (
       this.stores &&

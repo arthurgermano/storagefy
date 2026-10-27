@@ -8,45 +8,21 @@ const DECODER = new TextDecoder();
 
 // ------------------------------------------------------------------------------------------------
 
-let crypto;
-let subtle;
-
-// ------------------------------------------------------------------------------------------------
-
 /**
- * Initializes the Web Crypto API depending on environment (Browser or Node).
+ * The Web Crypto API — looked up on first use, not when the module loads: importing Storagefy does nothing by itself
+ * ("sideEffects": false), and a page or runtime without it fails only when encryption is used. Browsers and Node ≥ 19
+ * expose it as globalThis.crypto.
+ * @private
+ * @returns {Crypto}
+ * @throws {Error} If the Web Crypto API is not available.
  */
-function getCrypto() {
-  try {
-    logInfo("CryptoHelper - Attempting to initialize crypto engine");
-
-    if (typeof window !== "undefined" && window.crypto) {
-      crypto = window.crypto;
-      subtle = crypto.subtle;
-      logInfo("CryptoHelper - Crypto initialized from window.crypto");
-      return;
-    }
-
-    if (typeof global !== "undefined") {
-      if (global.crypto?.webcrypto) {
-        crypto = global.crypto.webcrypto;
-        subtle = crypto.subtle;
-        logInfo("CryptoHelper - Crypto initialized from global.webcrypto");
-        return;
-      }
-    }
-
+function webCrypto() {
+  const crypto = globalThis.crypto;
+  if (!crypto || !crypto.subtle) {
+    logError("CryptoHelper - Web Crypto API not available");
     throw new Error("Crypto API not available");
-  } catch (error) {
-    logError("Failed to initialize crypto:", error);
-    throw error;
   }
-}
-
-try {
-  getCrypto();
-} catch (error) {
-  logError("Failed to initialize crypto:", error);
+  return crypto;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -60,7 +36,7 @@ try {
 const generateKeyMaterial = async (password) => {
   try {
     logInfo("CryptoHelper - Generating key material from password");
-    return subtle.importKey("raw", ENCODER.encode(password), "PBKDF2", false, [
+    return webCrypto().subtle.importKey("raw", ENCODER.encode(password), "PBKDF2", false, [
       "deriveKey",
     ]);
   } catch (error) {
@@ -88,7 +64,7 @@ export const deriveKey = async (password, salt, extractable = false) => {
       extractable,
     });
     const keyMaterial = await generateKeyMaterial(password);
-    return subtle.deriveKey(
+    return webCrypto().subtle.deriveKey(
       {
         name: "PBKDF2",
         salt: ENCODER.encode(salt),
@@ -126,9 +102,9 @@ export const encryptData = async (key, dataObj, raw = false) => {
 
   try {
     logInfo("CryptoHelper - Encrypting data", { raw });
-    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const iv = webCrypto().getRandomValues(new Uint8Array(12));
     const encoded = ENCODER.encode(JSON.stringify(dataObj));
-    const encrypted = await subtle.encrypt(
+    const encrypted = await webCrypto().subtle.encrypt(
       { name: "AES-GCM", iv },
       key,
       encoded,
@@ -179,7 +155,7 @@ export const decryptData = async (key, encryptedObj, raw = false) => {
       encrypted = decodeBase64(encryptedObj.data);
     }
 
-    const decrypted = await subtle.decrypt(
+    const decrypted = await webCrypto().subtle.decrypt(
       { name: "AES-GCM", iv },
       key,
       encrypted,

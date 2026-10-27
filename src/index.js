@@ -35,6 +35,9 @@ let svelteAdapter;
  * @param {string} [config.storeName="storagefy_db"] Store name
  * @param {number} [config.version=1] Database version
  * @param {boolean} [config.encrypt=false] Enable encryption
+ * @param {string} [config.password] Secret of the app the encryption key is derived from — without it, anyone who knows
+ *   this library can read encrypted values. It ships inside the app, so it only makes reading harder: never store a
+ *   token or a password with Storagefy
  * @param {string|boolean} [config.channelName=false] Channel name for storage communication between tabs
  * @param {number} [config.expireCheckInterval=1000] Expiration check interval
  * @param {string} [config.description="Storagefy database"] Database description

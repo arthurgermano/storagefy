@@ -1,9 +1,9 @@
 /**
  * Global debug flag.
- * Set to `true` to enable logging.
+ * Set to `true` to enable logging — before or after importing Storagefy: an earlier setting is kept.
  * @type {boolean}
  */
-globalThis.storagefyDebug = false;
+globalThis.storagefyDebug ??= false;
 
 /**
  * Global debug level.
@@ -17,7 +17,7 @@ globalThis.storagefyDebug = false;
  * 
  * @type {number}
  */
-globalThis.storagefyDebugLevel = 0;
+globalThis.storagefyDebugLevel ??= 0;
 
 // ------------------------------------------------------------------------------------------------
 

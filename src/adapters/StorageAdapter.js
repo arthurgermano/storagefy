@@ -21,6 +21,10 @@ class StorageAdapter {
    *                                 If provided, a CrossTabChannel is initialized for emitting and receiving changes.
    */
   constructor(channelName) {
+    // The AES key of each storage key, derived once: PBKDF2 is slow on purpose (100,000 rounds), and a store is
+    // written on every change. Kept as the promise, so concurrent reads and writes share one derivation.
+    this._derivedKeys = new Map();
+
     // If a channel name is provided, initialize the cross-tab channel.
     if (channelName) {
       logInfo("StorageAdapter - Initializing cross-tab channel:", channelName);
@@ -169,6 +173,41 @@ class StorageAdapter {
   // ----------------------------------------------------------------------------------------------
 
   /**
+   * Keeps the app's encryption password (see the adapters' `password` option).
+   * @protected
+   * @param {string|null|undefined} password - A non-empty string, or nothing.
+   * @throws {Error} If a password is given that is not a non-empty string.
+   */
+  _setPassword(password) {
+    if (password !== null && password !== undefined && (typeof password !== "string" || password.length === 0)) {
+      throw new Error("Storagefy: password must be a non-empty string");
+    }
+    this.password = password || null;
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * The AES key for a storage key — derived on first use, then reused. A failed derivation is not kept, so the next
+   * call tries again.
+   * @protected
+   * @param {string} key - The storage key.
+   * @returns {Promise<CryptoKey>}
+   */
+  _cryptoKeyFor(key) {
+    let derived = this._derivedKeys.get(key);
+    if (!derived) {
+      // With the app's password the storage key is only the salt; without it, the key alone (as every version before)
+      derived = this.password ? cryptoHelper.deriveKey(this.password, key) : cryptoHelper.deriveKey(key);
+      this._derivedKeys.set(key, derived);
+      derived.catch(() => this._derivedKeys.delete(key));
+    }
+    return derived;
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
    * Encrypt a value
    * @protected
    * @param {any} value - Value to encrypt.
@@ -177,7 +216,7 @@ class StorageAdapter {
   async _encrypt(key, value) {
     if (!this.encrypt || !key) return value;
     try {
-      const cKey = await cryptoHelper.deriveKey(key);
+      const cKey = await this._cryptoKeyFor(key);
       const encrypted = await cryptoHelper.encryptData(cKey, value, false);
       logInfo(
         `StorageAdapter - Successfully encrypted value for key "${key}".`
@@ -200,7 +239,7 @@ class StorageAdapter {
   async _decrypt(key, value) {
     if (!this.encrypt || !key) return JSON.parse(value);
     try {
-      const cKey = await cryptoHelper.deriveKey(key);
+      const cKey = await this._cryptoKeyFor(key);
       const encryptedObj = JSON.parse(value);
       const decrypted = await cryptoHelper.decryptData(
         cKey,
