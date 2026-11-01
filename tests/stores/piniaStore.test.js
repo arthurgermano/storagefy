@@ -177,13 +177,14 @@ describe.each(Object.entries(adapterSetups))(
 
     // --------------------------------------------------------------------------------------------
 
-    it("should set and retrieve the same store data", async () => {
+    it("retrieves the state last written — a read waits for the write of a change", async () => {
       await piniaAdapter.setInStorage(store, "test-key");
-      store.$patch({ name: "Modified", age: 50 }); // mutate local store
+      store.$patch({ name: "Modified", age: 50 }); // the store is kept: the change is written
 
       await piniaAdapter.getFromStorage(store, "test-key");
-      expect(store.name).toBe("Alice");
-      expect(store.age).toBe(25);
+      expect(store.name).toBe("Modified");
+      expect(store.age).toBe(50);
+      expect(await adapter.get("test-key")).toMatchObject({ name: "Modified", age: 50 });
     });
 
     // --------------------------------------------------------------------------------------------

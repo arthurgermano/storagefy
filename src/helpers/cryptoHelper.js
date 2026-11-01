@@ -2,9 +2,42 @@ import { logError, logInfo } from "./loggerHelper.js";
 import { base64To, base64From } from "misc-helpers";
 
 // ------------------------------------------------------------------------------------------------
+// Encryption of stored values (AES-GCM, 256-bit keys, a random IV on every write).
+//
+// What it is for: it makes the values hard to read in the browser's tools. It does not keep a secret — everything
+// needed to decrypt ships with the app (see the README, "Encryption").
+//
+// How the key is derived from the password (keyDerivation):
+//   - "hkdf" (the default since 1.3.0): fast (well under a millisecond). Right when the password is a constant of the
+//     app — stretching it would only slow the app down, since anyone who reads the app's code has the password
+//   - "pbkdf2": 100,000 rounds, slow on purpose (milliseconds to tens of milliseconds per key). Right only when the
+//     password is typed by the person (a PIN, a passphrase): then guessing it is what must be slow
+//
+// Formats of a stored value:
+//   - since 1.3.0: { v: 2, kdf, iv, data } — standard base64 of the bytes; kdf says how the key was derived, so a value
+//     is read the way it was written, whatever the adapter's option is now
+//   - up to 1.2.x: { iv, data } — PBKDF2, and the bytes turned into text before base64. Still read; written again in
+//     the new format on the next write of the key
+// ------------------------------------------------------------------------------------------------
 
 const ENCODER = new TextEncoder();
 const DECODER = new TextDecoder();
+
+/** The ways a key may be derived from the password */
+export const KEY_DERIVATIONS = Object.freeze(["hkdf", "pbkdf2"]);
+
+/** The key derivation of an adapter that does not choose one */
+export const DEFAULT_KEY_DERIVATION = "hkdf";
+
+/** The format of the values written since 1.3.0 */
+export const ENVELOPE_VERSION = 2;
+
+const PBKDF2_ITERATIONS = 100000;
+/** Binds the HKDF keys to their use: the same password gives other keys anywhere else */
+const HKDF_INFO = ENCODER.encode("storagefy:aes-gcm-256");
+const IV_BYTES = 12;
+/** Bytes turned into text a slice at a time: one call with every byte as an argument overflows on large values */
+const BINARY_CHUNK = 0x8000;
 
 // ------------------------------------------------------------------------------------------------
 
@@ -28,54 +61,95 @@ function webCrypto() {
 // ------------------------------------------------------------------------------------------------
 
 /**
- * Creates a key material from a password to be used in key derivation.
- * @private
- * @param {string} password - The password to convert.
- * @returns {Promise<CryptoKey>} A CryptoKey representing the key material.
+ * Whether a value names a key derivation Storagefy knows.
+ * @param {unknown} value
+ * @returns {value is "hkdf" | "pbkdf2"}
  */
-const generateKeyMaterial = async (password) => {
-  try {
-    logInfo("CryptoHelper - Generating key material from password");
-    return webCrypto().subtle.importKey("raw", ENCODER.encode(password), "PBKDF2", false, [
-      "deriveKey",
-    ]);
-  } catch (error) {
-    logError("Error generating key material:", error);
-    throw error;
-  }
-};
+export function isKeyDerivation(value) {
+  return KEY_DERIVATIONS.includes(value);
+}
 
 // ------------------------------------------------------------------------------------------------
 
 /**
- * Derives a cryptographic key using PBKDF2 from a password and salt.
- * @param {string} password - The password.
- * @param {string} salt - The salt.
- * @param {boolean} [extractable=false] - Whether the derived key is extractable.
- * @returns {Promise<CryptoKey>} The derived key.
+ * The bytes as one text character each (codes 0–255), built a slice at a time.
+ * @private
+ * @param {Uint8Array} bytes
+ * @returns {string}
  */
-export const deriveKey = async (password, salt, extractable = false) => {
+function bytesToBinary(bytes) {
+  let binary = "";
+  for (let start = 0; start < bytes.length; start += BINARY_CHUNK) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(start, start + BINARY_CHUNK));
+  }
+  return binary;
+}
+
+// ------------------------------------------------------------------------------------------------
+
+/**
+ * Standard base64 of bytes — any size.
+ * @param {Uint8Array} bytes
+ * @returns {string}
+ */
+export function bytesToBase64(bytes) {
+  return btoa(bytesToBinary(bytes));
+}
+
+// ------------------------------------------------------------------------------------------------
+
+/**
+ * The bytes of standard base64.
+ * @param {string} text
+ * @returns {Uint8Array}
+ * @throws {Error} If the text is not base64.
+ */
+export function base64ToBytes(text) {
+  const binary = atob(text);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+}
+
+// ------------------------------------------------------------------------------------------------
+
+/**
+ * Derives an AES-GCM key from a password and a salt.
+ * @param {string} password - The password.
+ * @param {string} [salt] - The salt (the storage key, for the adapters).
+ * @param {boolean} [extractable=false] - Whether the derived key is extractable.
+ * @param {"hkdf"|"pbkdf2"} [keyDerivation="pbkdf2"] - How (see the top of this file). The default stays PBKDF2 for
+ *   callers of this helper; the adapters pass their own option.
+ * @returns {Promise<CryptoKey>} The derived key.
+ * @throws {Error} If the password is not a non-empty string, or the key derivation is unknown.
+ */
+export const deriveKey = async (password, salt, extractable = false, keyDerivation = "pbkdf2") => {
   try {
     if (typeof password !== "string" || !password.length) {
       throw new Error("Invalid password");
     }
-    logInfo("CryptoHelper - Deriving key with PBKDF2", {
-      passwordLength: password.length,
-      extractable,
-    });
-    const keyMaterial = await generateKeyMaterial(password);
-    return webCrypto().subtle.deriveKey(
-      {
-        name: "PBKDF2",
-        salt: ENCODER.encode(salt),
-        iterations: 100000,
-        hash: "SHA-256",
-      },
-      keyMaterial,
-      { name: "AES-GCM", length: 256 },
-      extractable,
-      ["encrypt", "decrypt"],
+    if (!isKeyDerivation(keyDerivation)) {
+      throw new Error(`Unknown key derivation: ${String(keyDerivation)}`);
+    }
+    logInfo("CryptoHelper - Deriving key", { keyDerivation, extractable });
+    const subtle = webCrypto().subtle;
+    const keyMaterial = await subtle.importKey(
+      "raw",
+      ENCODER.encode(password),
+      keyDerivation === "hkdf" ? "HKDF" : "PBKDF2",
+      false,
+      ["deriveKey"],
     );
+    const algorithm =
+      keyDerivation === "hkdf"
+        ? { name: "HKDF", hash: "SHA-256", salt: ENCODER.encode(salt ?? ""), info: HKDF_INFO }
+        : { name: "PBKDF2", hash: "SHA-256", salt: ENCODER.encode(salt), iterations: PBKDF2_ITERATIONS };
+    return await subtle.deriveKey(algorithm, keyMaterial, { name: "AES-GCM", length: 256 }, extractable, [
+      "encrypt",
+      "decrypt",
+    ]);
   } catch (error) {
     logError("Error deriving key:", error);
     throw error;
@@ -85,41 +159,63 @@ export const deriveKey = async (password, salt, extractable = false) => {
 // ------------------------------------------------------------------------------------------------
 
 /**
- * Encrypts a JavaScript object using AES-GCM.
+ * Encrypts a text in the format written since 1.3.0.
+ * @param {CryptoKey} key - The AES key.
+ * @param {string} text - What to encrypt.
+ * @param {"hkdf"|"pbkdf2"} keyDerivation - How the key was derived — recorded so the value is read the same way.
+ * @returns {Promise<{ v: 2, kdf: "hkdf"|"pbkdf2", iv: string, data: string }>}
+ * @throws {Error} If encryption fails (e.g. not an AES-GCM key).
+ */
+export async function sealText(key, text, keyDerivation) {
+  const iv = webCrypto().getRandomValues(new Uint8Array(IV_BYTES));
+  const encrypted = await webCrypto().subtle.encrypt({ name: "AES-GCM", iv }, key, ENCODER.encode(text));
+  return { v: ENVELOPE_VERSION, kdf: keyDerivation, iv: bytesToBase64(iv), data: bytesToBase64(new Uint8Array(encrypted)) };
+}
+
+// ------------------------------------------------------------------------------------------------
+
+/**
+ * Decrypts a text written by sealText.
+ * @param {CryptoKey} key - The AES key.
+ * @param {{ iv: string, data: string }} envelope - What sealText returned.
+ * @returns {Promise<string>}
+ * @throws {Error} If it does not decrypt with this key (another key, or the value was changed).
+ */
+export async function openText(key, envelope) {
+  const decrypted = await webCrypto().subtle.decrypt(
+    { name: "AES-GCM", iv: base64ToBytes(envelope.iv) },
+    key,
+    base64ToBytes(envelope.data),
+  );
+  return DECODER.decode(decrypted);
+}
+
+// ------------------------------------------------------------------------------------------------
+
+/**
+ * Encrypts a JavaScript value in the format of 1.2.x ({ iv, data }) — kept for callers of this helper; the adapters
+ * write with sealText since 1.3.0.
  * @param {CryptoKey} key - The AES key.
  * @param {any} dataObj - The data to encrypt.
  * @param {boolean} [raw=false] - If true, returns raw bytes.
- * @returns {Promise<Object>} The encrypted data (base64 or raw format).
+ * @returns {Promise<{ iv: string|Uint8Array, data: string|Uint8Array }>} The encrypted data (base64 or raw format).
+ * @throws {Error} If the value cannot be encrypted (undefined, a function, a symbol) or encryption fails.
  */
 export const encryptData = async (key, dataObj, raw = false) => {
-  if (
-    dataObj === undefined ||
-    typeof dataObj === "function" ||
-    typeof dataObj === "symbol"
-  ) {
+  if (dataObj === undefined || typeof dataObj === "function" || typeof dataObj === "symbol") {
     throw new Error("Invalid data type for encryption");
   }
 
   try {
     logInfo("CryptoHelper - Encrypting data", { raw });
-    const iv = webCrypto().getRandomValues(new Uint8Array(12));
+    const iv = webCrypto().getRandomValues(new Uint8Array(IV_BYTES));
     const encoded = ENCODER.encode(JSON.stringify(dataObj));
-    const encrypted = await webCrypto().subtle.encrypt(
-      { name: "AES-GCM", iv },
-      key,
-      encoded,
-    );
+    const encrypted = new Uint8Array(await webCrypto().subtle.encrypt({ name: "AES-GCM", iv }, key, encoded));
 
     if (raw) {
-      return { iv, data: new Uint8Array(encrypted) };
+      return { iv, data: encrypted };
     }
-
-    const ivBase64 = base64To(String.fromCharCode(...iv));
-    const encryptedBase64 = base64To(
-      String.fromCharCode(...new Uint8Array(encrypted)),
-    );
-
-    return { iv: ivBase64, data: encryptedBase64 };
+    return { iv: base64To(bytesToBinary(iv)), data: base64To(bytesToBinary(encrypted)) };
   } catch (error) {
     logError("Error encrypting data:", error);
     throw error;
@@ -129,38 +225,23 @@ export const encryptData = async (key, dataObj, raw = false) => {
 // ------------------------------------------------------------------------------------------------
 
 /**
- * Decrypts encrypted data using AES-GCM.
+ * Decrypts data in the format of 1.2.x ({ iv, data }) — values written before 1.3.0 are read with it.
  * @param {CryptoKey} key - The AES key.
- * @param {Object} encryptedObj - Encrypted data.
+ * @param {{ iv: string|Uint8Array, data: string|Uint8Array }} encryptedObj - Encrypted data.
  * @param {boolean} [raw=false] - Whether the encrypted data is in raw format.
  * @returns {Promise<any>} The decrypted original data.
+ * @throws {Error} If it does not decrypt with this key.
  */
 export const decryptData = async (key, encryptedObj, raw = false) => {
-  let iv, encrypted;
-
   try {
     logInfo("CryptoHelper - Decrypting data", { raw });
-
-    if (raw) {
-      iv = new Uint8Array(encryptedObj.iv);
-      encrypted = new Uint8Array(encryptedObj.data);
-    } else {
-      const decodeBase64 = (b64) =>
-        new Uint8Array(
-          base64From(b64)
-            .split("")
-            .map((char) => char.charCodeAt(0)),
-        );
-      iv = decodeBase64(encryptedObj.iv);
-      encrypted = decodeBase64(encryptedObj.data);
-    }
-
+    // Up to 1.2.x the bytes were turned into text and that text into base64: reversed the same way
+    const decode = (value) => (raw ? new Uint8Array(value) : Uint8Array.from(base64From(value), (char) => char.charCodeAt(0)));
     const decrypted = await webCrypto().subtle.decrypt(
-      { name: "AES-GCM", iv },
+      { name: "AES-GCM", iv: decode(encryptedObj.iv) },
       key,
-      encrypted,
+      decode(encryptedObj.data),
     );
-
     return JSON.parse(DECODER.decode(decrypted));
   } catch (error) {
     logError("Error decrypting data:", error);
@@ -170,89 +251,59 @@ export const decryptData = async (key, encryptedObj, raw = false) => {
 
 // ------------------------------------------------------------------------------------------------
 
-/**
- * Encrypts (obfuscates) a string key using a simple transformation.
- * This is not a secure encryption method and is intended only for light obfuscation
- * (e.g., hiding keys in client-side storage from plain sight).
- *
- * Internally uses `simpleObfuscate()` to perform a base64 + character shift.
- *
- * @param {string} key - The key to obfuscate.
- * @returns {string} The obfuscated key.
- * @throws {Error} If obfuscation fails.
- */
-export function encryptKey(key) {
-  try {
-    if (!key) {
-      return key;
-    }
+/** The code points a key name may hold: up to U+10FFFF, without the surrogates (U+D800–U+DFFF, never alone) */
+const MAX_CODE_POINT = 0x10ffff;
+const SURROGATES = { first: 0xd800, last: 0xdfff };
 
-    // Light obfuscation using character shifting + base64
-    return this.simpleObfuscate(key);
-  } catch (error) {
-    logError("Error in encryptKey:", error);
-    throw error;
+/**
+ * A code point moved by one, skipping the surrogates and wrapping at the ends — a one-to-one map of the code points a
+ * text may hold, so every key name keeps a name of its own.
+ * @private
+ * @param {number} codePoint
+ * @param {1|-1} step
+ * @returns {number}
+ */
+function shiftCodePoint(codePoint, step) {
+  let next = codePoint + step;
+  if (next >= SURROGATES.first && next <= SURROGATES.last) {
+    next += step * (SURROGATES.last - SURROGATES.first + 1);
   }
+  if (next > MAX_CODE_POINT) return 0;
+  if (next < 0) return MAX_CODE_POINT;
+  return next;
 }
 
 // ------------------------------------------------------------------------------------------------
 
 /**
- * Applies a simple obfuscation to a string:
- * 1. Shifts each character code by +1.
- * 2. Converts the result to base64 format using `base64To()`.
+ * Applies a simple obfuscation to a string (each character moved by one, then base64) — keeps key names out of plain
+ * sight. Not encryption.
  *
- * This is useful for making strings less readable, though not secure.
- *
+ * By character (code point): up to 1.3.0 by UTF-16 unit, which dropped the second half of a character outside the
+ * BMP (an emoji) — "fav-😀" and "fav-😁" became the same stored key. Names of BMP characters only are obfuscated as
+ * before.
  * @param {string} str - The input string to obfuscate.
  * @returns {string} The obfuscated string.
- * @throws {Error} If the obfuscation process fails.
  */
 export function simpleObfuscate(str) {
   if (!str) return str;
-
   logInfo("CryptoHelper - Obfuscating string");
-
-  try {
-    // Shift each character's char code by +1
-    const shifted = [...str]
-      .map((char) => String.fromCharCode(char.charCodeAt(0) + 1))
-      .join("");
-
-    // Convert to base64
-    return base64To(shifted);
-  } catch (error) {
-    return str;
-  }
+  const shifted = [...str].map((char) => String.fromCodePoint(shiftCodePoint(char.codePointAt(0), 1))).join("");
+  return base64To(shifted);
 }
 
 // ------------------------------------------------------------------------------------------------
 
 /**
- * Reverses a previously obfuscated string:
- * 1. Decodes from base64 using `base64From()`.
- * 2. Shifts each character code by -1 to restore the original.
- *
+ * Reverses simpleObfuscate.
  * @param {string} str - The obfuscated string to restore.
- * @returns {string} The original (deobfuscated) string.
- * @throws {Error} If the deobfuscation process fails.
+ * @returns {string} The original string.
  */
 export function simpleDeobfuscate(str) {
   if (!str) return str;
-
   logInfo("CryptoHelper - Deobfuscating string");
-
-  try {
-    // Decode base64
-    const decoded = base64From(str);
-
-    // Shift each character's char code back by -1
-    return [...decoded]
-      .map((char) => String.fromCharCode(char.charCodeAt(0) - 1))
-      .join("");
-  } catch (error) {
-    return str;
-  }
+  const decoded = base64From(str);
+  return [...decoded].map((char) => String.fromCodePoint(shiftCodePoint(char.codePointAt(0), -1))).join("");
 }
 
 // ------------------------------------------------------------------------------------------------

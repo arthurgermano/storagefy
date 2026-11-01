@@ -34,7 +34,8 @@ startStoragefy(&#123;
   dbName: "my-react-app",
   adapter: "indexedDB", // or "localStorage" or "sessionStorage"
   encrypt: true,
-  channelName: "react-sync" // for cross-tab synchronization
+  channelName: "react-sync",  // the channel the tabs talk on…
+  enableSyncTabs: true   // …and this storage tells them about its writes
 &#125;);
 
 // Get the React adapter
@@ -143,7 +144,8 @@ const reducer = (state = &#123; count: 0 &#125;, action) => &#123;
   switch (action.type) &#123;
     case 'INCREMENT':
       return &#123; ...state, count: state.count + 1 &#125;;
-    case 'SET_STATE_FROM_STORAGE': // Important: handle this action type
+    case 'SET_STATE_FROM_STORAGE': // getFromStorage: the state kept
+    case 'STORAGEFY_UPDATE':       // syncTabs: the state of another tab
       return &#123; ...state, ...action.payload &#125;;
     default:
       return state;
@@ -157,9 +159,9 @@ await setReactStorage(store, "redux-state");
           </code>
         </pre>
         <p>
-          Note: Your Redux reducer should handle the <code
-            >SET_STATE_FROM_STORAGE</code
-          > action type for proper hydration from persistent storage.
+          Note: your Redux reducer handles <code>SET_STATE_FROM_STORAGE</code> (the state loaded by
+          <code>getFromStorage</code>) and, with <code>syncTabs</code>, <code>STORAGEFY_UPDATE</code> (the state of
+          another tab). <code>setInStorage</code> resolves once the state is written for the first time.
         </p>
       </div>
 
@@ -310,10 +312,10 @@ ignoreKeys: [
           </li>
 
           <li>
-            <code>timeout</code>: Expiration duration in milliseconds
+            <code>timeout</code>: <strong>expiration</strong> of the stored state, in milliseconds
             <p class="strf-option-desc">
-              After this duration, the stored data will be considered expired
-              and removed. If not set, data persists indefinitely.
+              Counted again after each write. It is not a time limit of the operation: after it, the stored state is
+              gone (the store keeps what it holds in memory). If not set, the state is kept until removed.
             </p>
             <pre
               class="strf-code-block">
@@ -330,10 +332,8 @@ timeout: 300000   // expires after 5 minutes
             synchronization
             <p class="strf-option-desc">
               When <code>true</code>, changes made in one browser tab will be
-              reflected in all others in real time. Requires <code
-                >channelName</code
-              >
-              to be set during <code>startStoragefy</code>.
+              reflected in all others in real time. Requires <code>channelName</code> and <code>enableSyncTabs: true</code> on the storage adapter — without
+              both, nothing is synced and nothing warns you.
             </p>
             <pre
               class="strf-code-block">
@@ -341,7 +341,8 @@ timeout: 300000   // expires after 5 minutes
 // Enable tab sync
 startStoragefy(&#123;
   dbName: "my-app",
-  channelName: "storagefy-sync" // required for syncTabs to work
+  channelName: "storagefy-sync", // 1. the channel the tabs talk on
+  enableSyncTabs: true            // 2. this storage tells the other tabs about its writes
 &#125;);
 
 await setInStorage(myStore, "user", &#123;
@@ -350,6 +351,23 @@ await setInStorage(myStore, "user", &#123;
         </code>
       </pre>
           </li>
+          <li>
+            <code>onError</code>: called with an <code>Error</code> when the state could not be saved
+            <p class="strf-option-desc">
+              The storage is full, the encryption failed, or a change from another tab could not be read — the store
+              keeps working. <code>getFromStorage(store, key, &#123; onError &#125;)</code> also tells a stored state
+              that is there but cannot be read (another password, changed by hand).
+            </p>
+            <pre
+              class="strf-code-block">
+        <code>
+await setInStorage(myStore, "user", &#123;
+  onError: (error) => reportToMyApp(error) // error.cause holds what failed
+&#125;);
+        </code>
+      </pre>
+          </li>
+
         </ul>
       </div>
     </section>
@@ -368,7 +386,8 @@ await setInStorage(myStore, "user", &#123;
 startStoragefy(&#123;
   dbName: "my-react-app",
   adapter: "indexedDB",
-  channelName: "react-sync" // Required for cross-tab sync
+  channelName: "react-sync",  // the channel the tabs talk on…
+  enableSyncTabs: true   // …and this storage tells them about its writes
 &#125;);
 
 // Enable syncTabs in your store configuration
@@ -416,8 +435,7 @@ await setReactStorage(store, "shared-state", &#123;
           </li>
           <li><code>key</code>: Storage key string</li>
           <li>
-            <code>options</code>: Configuration options (ignoreKeys, timeout,
-            syncTabs)
+            <code>options</code>: Configuration options (ignoreKeys, timeout, syncTabs, onError)
           </li>
         </ul>
         <p>Returns: Promise resolving to true on success</p>
@@ -432,11 +450,23 @@ await setReactStorage(store, "shared-state", &#123;
           </li>
           <li>
             <code>getFromStorage(store, key)</code>: Loads persisted state into
-            store
+            store — <code>&#123; onError &#125;</code> tells a stored state that cannot be read
           </li>
           <li>
-            <code>destroy()</code>: Cleans up subscriptions when adapter is no
-            longer needed
+            <code>destroy(key)</code>: Stops keeping the store of <code>key</code> — no more writes, no more changes from
+            the other tabs. What is stored stays
+          </li>
+          <li>
+            <code>destroyAll()</code>: Stops keeping every store of the adapter. The storage adapter goes on
+          </li>
+          <li>
+            What the store holds is written and loaded back as it was — any JSON value (an object, an array, a
+            number, a string, a boolean). A state set to <code>null</code> or <code>undefined</code> removes the stored
+            key (a store emptied on sign-out is not loaded back)
+          </li>
+          <li>
+            The state is read with <code>getState()</code> (Redux, Zustand) or <code>get()</code>; a store with neither
+            is read from what it passes its listeners — a notification that passes nothing writes nothing
           </li>
         </ul>
       </div>
@@ -468,8 +498,8 @@ await setReactStorage(store, "shared-state", &#123;
           mutations that could conflict across tabs
         </li>
         <li>
-          Call <code>destroy()</code> on the adapter instance when unmounting components
-          to avoid memory leaks
+          Call <code>destroy(key)</code> on the React adapter when a store is no longer kept (e.g. its component
+          unmounts) — it stops the writes and the changes from other tabs
         </li>
         <li>
           Consider using separate storage keys for different logical parts of

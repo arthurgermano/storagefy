@@ -290,7 +290,7 @@ describe.each(Object.entries(adapterSetups))(
 
       // ------------------------------------------------------------------------------------------
 
-      it("should set and retrieve the same store data", async () => {
+      it("retrieves the state last written — a read waits for the write of a change", async () => {
         await reactAdapter.setInStorage(store, "test-key");
 
         let storeObj;
@@ -314,10 +314,12 @@ describe.each(Object.entries(adapterSetups))(
           storeObj.setState({ name: "Modified", age: 50 });
         }
 
+        // The store is kept: the change is written, and a read waits for it
         await reactAdapter.getFromStorage(store, "test-key");
 
-        expect(storeObj.getState().name).toBe("Alice");
-        expect(storeObj.getState().age).toBe(25);
+        expect(storeObj.getState().name).toBe("Modified");
+        expect(storeObj.getState().age).toBe(50);
+        expect(await adapter.get("test-key")).toMatchObject({ name: "Modified", age: 50 });
       });
 
       // ------------------------------------------------------------------------------------------
@@ -357,31 +359,20 @@ describe.each(Object.entries(adapterSetups))(
       it("should update the value in store when the store is updated", async () => {
         await reactAdapter.setInStorage(store, "test-key");
 
-        let storeObj;
-        if (storeName === "Redux") {
-          storeObj = reduxStore;
-          storeObj.dispatch({
-            type: "SET_STATE_FROM_STORAGE",
-            payload: { name: "Bob", age: 30 },
-          });
-        } else if (storeName === "Zustand") {
-          storeObj = zustandStore;
-        } else if (storeName === "Custom") {
-          storeObj = customStore;
-        } else if (storeName === "Jotai") {
-          storeObj = jotaiStore;
-        }
-
         const dataBF = await adapter.get("test-key");
         expect(dataBF.name).toBe("Alice");
         expect(dataBF.age).toBe(25);
 
         // Update the store
-        if (storeName !== "Redux") {
-          storeObj.setState({ name: "Bob", age: 30 });
+        if (storeName === "Redux") {
+          reduxStore.dispatch({
+            type: "SET_STATE_FROM_STORAGE",
+            payload: { name: "Bob", age: 30 },
+          });
+        } else {
+          ({ Zustand: zustandStore, Custom: customStore, Jotai: jotaiStore })[storeName].setState({ name: "Bob", age: 30 });
         }
 
-        await sleep(10);
         const data = await adapter.get("test-key");
         expect(data.name).toBe("Bob");
         expect(data.age).toBe(30);

@@ -2,6 +2,13 @@ import { logError, logInfo } from "./loggerHelper.js";
 import { base64To, base64From } from "misc-helpers";
 const ENCODER = new TextEncoder();
 const DECODER = new TextDecoder();
+const KEY_DERIVATIONS = Object.freeze(["hkdf", "pbkdf2"]);
+const DEFAULT_KEY_DERIVATION = "hkdf";
+const ENVELOPE_VERSION = 2;
+const PBKDF2_ITERATIONS = 1e5;
+const HKDF_INFO = ENCODER.encode("storagefy:aes-gcm-256");
+const IV_BYTES = 12;
+const BINARY_CHUNK = 32768;
 function webCrypto() {
   const crypto = globalThis.crypto;
   if (!crypto || !crypto.subtle) {
@@ -10,88 +17,93 @@ function webCrypto() {
   }
   return crypto;
 }
-const generateKeyMaterial = async (password) => {
-  try {
-    logInfo("CryptoHelper - Generating key material from password");
-    return webCrypto().subtle.importKey("raw", ENCODER.encode(password), "PBKDF2", false, [
-      "deriveKey"
-    ]);
-  } catch (error) {
-    logError("Error generating key material:", error);
-    throw error;
+function isKeyDerivation(value) {
+  return KEY_DERIVATIONS.includes(value);
+}
+function bytesToBinary(bytes) {
+  let binary = "";
+  for (let start = 0; start < bytes.length; start += BINARY_CHUNK) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(start, start + BINARY_CHUNK));
   }
-};
-const deriveKey = async (password, salt, extractable = false) => {
+  return binary;
+}
+function bytesToBase64(bytes) {
+  return btoa(bytesToBinary(bytes));
+}
+function base64ToBytes(text) {
+  const binary = atob(text);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+}
+const deriveKey = async (password, salt, extractable = false, keyDerivation = "pbkdf2") => {
   try {
     if (typeof password !== "string" || !password.length) {
       throw new Error("Invalid password");
     }
-    logInfo("CryptoHelper - Deriving key with PBKDF2", {
-      passwordLength: password.length,
-      extractable
-    });
-    const keyMaterial = await generateKeyMaterial(password);
-    return webCrypto().subtle.deriveKey(
-      {
-        name: "PBKDF2",
-        salt: ENCODER.encode(salt),
-        iterations: 1e5,
-        hash: "SHA-256"
-      },
-      keyMaterial,
-      { name: "AES-GCM", length: 256 },
-      extractable,
-      ["encrypt", "decrypt"]
+    if (!isKeyDerivation(keyDerivation)) {
+      throw new Error(`Unknown key derivation: ${String(keyDerivation)}`);
+    }
+    logInfo("CryptoHelper - Deriving key", { keyDerivation, extractable });
+    const subtle = webCrypto().subtle;
+    const keyMaterial = await subtle.importKey(
+      "raw",
+      ENCODER.encode(password),
+      keyDerivation === "hkdf" ? "HKDF" : "PBKDF2",
+      false,
+      ["deriveKey"]
     );
+    const algorithm = keyDerivation === "hkdf" ? { name: "HKDF", hash: "SHA-256", salt: ENCODER.encode(salt ?? ""), info: HKDF_INFO } : { name: "PBKDF2", hash: "SHA-256", salt: ENCODER.encode(salt), iterations: PBKDF2_ITERATIONS };
+    return await subtle.deriveKey(algorithm, keyMaterial, { name: "AES-GCM", length: 256 }, extractable, [
+      "encrypt",
+      "decrypt"
+    ]);
   } catch (error) {
     logError("Error deriving key:", error);
     throw error;
   }
 };
+async function sealText(key, text, keyDerivation) {
+  const iv = webCrypto().getRandomValues(new Uint8Array(IV_BYTES));
+  const encrypted = await webCrypto().subtle.encrypt({ name: "AES-GCM", iv }, key, ENCODER.encode(text));
+  return { v: ENVELOPE_VERSION, kdf: keyDerivation, iv: bytesToBase64(iv), data: bytesToBase64(new Uint8Array(encrypted)) };
+}
+async function openText(key, envelope) {
+  const decrypted = await webCrypto().subtle.decrypt(
+    { name: "AES-GCM", iv: base64ToBytes(envelope.iv) },
+    key,
+    base64ToBytes(envelope.data)
+  );
+  return DECODER.decode(decrypted);
+}
 const encryptData = async (key, dataObj, raw = false) => {
   if (dataObj === void 0 || typeof dataObj === "function" || typeof dataObj === "symbol") {
     throw new Error("Invalid data type for encryption");
   }
   try {
     logInfo("CryptoHelper - Encrypting data", { raw });
-    const iv = webCrypto().getRandomValues(new Uint8Array(12));
+    const iv = webCrypto().getRandomValues(new Uint8Array(IV_BYTES));
     const encoded = ENCODER.encode(JSON.stringify(dataObj));
-    const encrypted = await webCrypto().subtle.encrypt(
-      { name: "AES-GCM", iv },
-      key,
-      encoded
-    );
+    const encrypted = new Uint8Array(await webCrypto().subtle.encrypt({ name: "AES-GCM", iv }, key, encoded));
     if (raw) {
-      return { iv, data: new Uint8Array(encrypted) };
+      return { iv, data: encrypted };
     }
-    const ivBase64 = base64To(String.fromCharCode(...iv));
-    const encryptedBase64 = base64To(
-      String.fromCharCode(...new Uint8Array(encrypted))
-    );
-    return { iv: ivBase64, data: encryptedBase64 };
+    return { iv: base64To(bytesToBinary(iv)), data: base64To(bytesToBinary(encrypted)) };
   } catch (error) {
     logError("Error encrypting data:", error);
     throw error;
   }
 };
 const decryptData = async (key, encryptedObj, raw = false) => {
-  let iv, encrypted;
   try {
     logInfo("CryptoHelper - Decrypting data", { raw });
-    if (raw) {
-      iv = new Uint8Array(encryptedObj.iv);
-      encrypted = new Uint8Array(encryptedObj.data);
-    } else {
-      const decodeBase64 = (b64) => new Uint8Array(
-        base64From(b64).split("").map((char) => char.charCodeAt(0))
-      );
-      iv = decodeBase64(encryptedObj.iv);
-      encrypted = decodeBase64(encryptedObj.data);
-    }
+    const decode = (value) => raw ? new Uint8Array(value) : Uint8Array.from(base64From(value), (char) => char.charCodeAt(0));
     const decrypted = await webCrypto().subtle.decrypt(
-      { name: "AES-GCM", iv },
+      { name: "AES-GCM", iv: decode(encryptedObj.iv) },
       key,
-      encrypted
+      decode(encryptedObj.data)
     );
     return JSON.parse(DECODER.decode(decrypted));
   } catch (error) {
@@ -99,42 +111,41 @@ const decryptData = async (key, encryptedObj, raw = false) => {
     throw error;
   }
 };
-function encryptKey(key) {
-  try {
-    if (!key) {
-      return key;
-    }
-    return this.simpleObfuscate(key);
-  } catch (error) {
-    logError("Error in encryptKey:", error);
-    throw error;
+const MAX_CODE_POINT = 1114111;
+const SURROGATES = { first: 55296, last: 57343 };
+function shiftCodePoint(codePoint, step) {
+  let next = codePoint + step;
+  if (next >= SURROGATES.first && next <= SURROGATES.last) {
+    next += step * (SURROGATES.last - SURROGATES.first + 1);
   }
+  if (next > MAX_CODE_POINT) return 0;
+  if (next < 0) return MAX_CODE_POINT;
+  return next;
 }
 function simpleObfuscate(str) {
   if (!str) return str;
   logInfo("CryptoHelper - Obfuscating string");
-  try {
-    const shifted = [...str].map((char) => String.fromCharCode(char.charCodeAt(0) + 1)).join("");
-    return base64To(shifted);
-  } catch (error) {
-    return str;
-  }
+  const shifted = [...str].map((char) => String.fromCodePoint(shiftCodePoint(char.codePointAt(0), 1))).join("");
+  return base64To(shifted);
 }
 function simpleDeobfuscate(str) {
   if (!str) return str;
   logInfo("CryptoHelper - Deobfuscating string");
-  try {
-    const decoded = base64From(str);
-    return [...decoded].map((char) => String.fromCharCode(char.charCodeAt(0) - 1)).join("");
-  } catch (error) {
-    return str;
-  }
+  const decoded = base64From(str);
+  return [...decoded].map((char) => String.fromCodePoint(shiftCodePoint(char.codePointAt(0), -1))).join("");
 }
 export {
+  DEFAULT_KEY_DERIVATION,
+  ENVELOPE_VERSION,
+  KEY_DERIVATIONS,
+  base64ToBytes,
+  bytesToBase64,
   decryptData,
   deriveKey,
   encryptData,
-  encryptKey,
+  isKeyDerivation,
+  openText,
+  sealText,
   simpleDeobfuscate,
   simpleObfuscate
 };

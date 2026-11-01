@@ -18,12 +18,13 @@ declare class CrossTabChannel {
     channel: BroadcastChannel;
     channelName: string;
     /**
-     * Subscribes to incoming messages on the channel.
-     * The callback will be called with the message data whenever another tab posts a message.
+     * Listens for the messages other tabs post. Every listener gets every message — adapters of several stores can
+     * share one channel.
      *
-     * @param {Function} callback - A function that handles incoming message data.
+     * @param {(data: any) => void} callback - Called with each message's data; an error it throws is logged.
+     * @returns {() => void} Stops this listener.
      */
-    subscribe(callback: Function): void;
+    subscribe(callback: (data: any) => void): () => void;
     /**
      * Sends a message to all tabs subscribed to the same channel.
      *

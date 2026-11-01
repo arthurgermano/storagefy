@@ -45,7 +45,6 @@ const cartSlice = createSlice({
       (action) => action.type === "STORAGEFY_UPDATE",
       (state, action) => {
         const payload = action.payload;
-        delete payload.STORAGEFY_SILENT_CHANNEL_UPDATE;
         if (payload?.cart?.items) {
           state.items = payload.cart.items;
         } else if (payload?.items) {

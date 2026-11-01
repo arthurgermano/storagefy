@@ -1,34 +1,16 @@
 export default IndexedDBAdapter;
 /**
- * Class representing an IndexedDB storage adapter.
  * @class IndexedDBAdapter
  * @extends StorageAdapter
  */
 declare class IndexedDBAdapter extends StorageAdapter {
     /**
-     * Creates an instance of IndexedDBAdapter.
-     * @param {Object} config Configuration object
-     * @param {string} config.dbName Name of the IndexedDB database
-     * @param {string} [config.storeName] Name of the object store (defaults to `${dbName}_store`)
-     * @param {number} [config.version=1] Database version
-     * @param {boolean} [config.encrypt=false] Whether to encrypt stored data
-     * @param {string} [config.password] - Secret of the app the encryption key is derived from (with the storage key as salt). Without it, the key comes from the storage key alone — readable by anyone who knows this library. Ignored when `encrypt` is false.
-     * @param {number} [config.expireCheckInterval=1000] Interval for expiration checks in ms
-     * @param {string} [config.description=""] Description of the database
-     * @param {string} [config.channelName=false] - Optional channel name for cross-tab communication.
-     * @param {boolean} [config.enableSyncTabs=false] - Whether to enable sync automatically on change key value
-     * @throws {Error} Throws if IndexedDB is not available in the environment
+     * @param {import("./StorageAdapter.js").StorageAdapterOptions & { storeName?: string }} options - storeName: the
+     *   object store (defaults to `${dbName}_store`).
+     * @throws {Error} If IndexedDB is not available, or an encryption option is invalid.
      */
-    constructor({ dbName, storeName, version, encrypt, password, expireCheckInterval, channelName, enableSyncTabs, description, }: {
-        dbName: string;
+    constructor({ dbName, storeName, version, encrypt, password, keyDerivation, expireCheckInterval, channelName, enableSyncTabs, description, }: import("./StorageAdapter.js").StorageAdapterOptions & {
         storeName?: string;
-        version?: number;
-        encrypt?: boolean;
-        password?: string;
-        expireCheckInterval?: number;
-        description?: string;
-        channelName?: string;
-        enableSyncTabs?: boolean;
     });
     isReady: boolean;
     dbName: string;
@@ -40,65 +22,100 @@ declare class IndexedDBAdapter extends StorageAdapter {
     adapterId: string;
     enableSyncTabs: boolean;
     expireCheckInterval: number;
-    dbPromise: Promise<any>;
-    _unloadHandler: () => void;
+    dbPromise: Promise<IDBDatabase>;
     /**
-     * Initializes the IndexedDB database.
+     * Opens the database (creating the object store and the metadata the first time).
+     *
+     * Never left waiting for good: a database without this adapter's object store is refused with the reason, and a
+     * newer version opened by another tab closes this connection (see _closeDB) instead of blocking that tab.
      * @private
-     * @param {Object} params Initialization parameters
-     * @param {string} params.dbName Database name
-     * @param {number} params.version Database version
-     * @param {string} params.description Database description
-     * @returns {Promise} Resolves with the database instance when ready
+     * @returns {Promise<IDBDatabase>}
+     * @throws {Error} If the database does not open, or has no object store of this name.
      */
     private _initDB;
     /**
-     * Waits for the database to be ready.
-     * @async
-     * @param {number} [timeout=15] Delay between readiness checks in ms
-     * @param {number} [tries=20] Maximum number of readiness checks
-     * @returns {Promise<void>} Resolves when database is ready
-     * @throws {Error} Throws if database doesn't become ready within the specified attempts
-     */
-    waitReadiness(timeout?: number, tries?: number): Promise<void>;
-    /**
-     * Helper method to execute operations within a store transaction.
+     * Closes the connection for good: every use after it fails with the reason (a write answers false, a read null,
+     * both through onError).
      * @private
-     * @async
-     * @param {string} mode Transaction mode ('readonly' or 'readwrite')
-     * @param {Function} callback Operation to execute with the store
-     * @returns {Promise} Resolves with the callback result
-     * @throws {Error} Throws if the operation fails
+     * @param {IDBDatabase} db
+     * @param {Error} reason - Why it closed.
+     */
+    private _closeDB;
+    /**
+     * Waits until the database is open.
+     * @param {number} [interval=50] - With tries: how long to wait, interval × (tries + 1) ms.
+     * @param {number} [tries=20]
+     * @returns {Promise<void>}
+     * @throws {Error} Why the database is not open (it was refused, upgraded by another tab, destroyed), or "Database is
+     *   not ready" when it is not open in time.
+     */
+    waitReadiness(interval?: number, tries?: number): Promise<void>;
+    /**
+     * Runs requests in one transaction of the object store and answers once the transaction is over — for a write,
+     * once it is really saved: a request that succeeds may still be undone when the transaction aborts (e.g. the
+     * storage is full).
+     *
+     * The callback must issue every request before it awaits anything else: a transaction closes when no request is
+     * pending.
+     * @private
+     * @template T
+     * @param {IDBTransactionMode} mode
+     * @param {(store: IDBObjectStore) => Promise<T>} callback - Issues the requests; resolves with the answer.
+     * @returns {Promise<T>}
+     * @throws {Error} If the database does not open, a request fails or the transaction aborts.
      */
     private _withStore;
     /**
+     * The answer of a request, as a promise.
+     * @private
+     * @param {IDBRequest} request
+     * @returns {Promise<any>}
+     */
+    private _answerOf;
+    /**
+     * The expiration timestamps as stored.
+     * @private
+     * @param {string|undefined} raw
+     * @returns {Object<string, number>}
+     */
+    private _expiresOf;
+    /**
      * Loads all expiration timestamps.
      * @private
-     * @async
-     * @returns {Promise<Object>} Object mapping keys to expiration timestamps
+     * @returns {Promise<Object<string, number>>}
      */
     private _loadExpires;
     /**
-     * Stores a value in storage with optional expiration.
-     * @async
-     * @param {string} key Key to store under
-     * @param {*} value Value to store (will be JSON stringified)
-     * @param {number} [expire] Expiration time in milliseconds from now
-     * @returns {Promise<boolean>} True if successful, false otherwise
-     * @example
-     * await adapter.set('myKey', { data: 'value' }, 3600000); // Expires in 1 hour
+     * Changes the expirations in the same transaction as the request that needs it — never read in one transaction
+     * and written in another, where two writes at once would lose one of the changes.
+     * @private
+     * @param {IDBObjectStore} store - The store of the running transaction.
+     * @param {(expires: Object<string, number>) => boolean} change - Changes the map; true when something changed.
+     * @returns {Promise<void>}
      */
-    set(key: string, value: any, expire?: number): Promise<boolean>;
+    private _changeExpires;
     /**
-     * Lists all keys with a given prefix and their values.
-     * @async
-     * @returns {Promise<Array<{key: string, value: *}>>} Array of key-value pairs
-     * @example
-     * const items = await adapter.list('user_');
+     * Removes a key and its expiration in one transaction, and tells the other tabs.
+     * @private
+     * @param {string} key
+     * @returns {Promise<void>}
+     * @throws {Error} If the transaction fails.
      */
-    list(): Promise<Array<{
-        key: string;
-        value: any;
-    }>>;
+    private _deleteNow;
+    /**
+     * Removes every key of the namespace and the expirations record (and the metadata, when asked), now.
+     * @private
+     * @param {boolean} withMeta - Remove the metadata too (clear).
+     * @returns {Promise<void>}
+     */
+    private _resetNow;
+    /**
+     * Removes the expiration of a key from the map.
+     * @private
+     * @param {Object<string, number>} expires
+     * @param {string} key
+     * @returns {boolean} Whether the key had one.
+     */
+    private _removeExpire;
 }
 import StorageAdapter from "./StorageAdapter.js";

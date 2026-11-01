@@ -27,6 +27,40 @@ import Layout from "../layouts/Layout.astro";
       <pre class="strf-code-block"><code>npm install storagefy</code></pre>
       <p>Or with yarn:</p>
       <pre class="strf-code-block"><code>yarn add storagefy</code></pre>
+      <p>The package ships its TypeScript declarations.</p>
+    </section>
+
+    <section class="strf-section">
+      <h2>What's new in 1.3.0</h2>
+      <ul>
+        <li>
+          <code>keyDerivation</code>: <code>"hkdf"</code> (the new default, fast) or <code>"pbkdf2"</code> (slow on
+          purpose, for a password the person types). Values written by 1.2.x are still read.
+        </li>
+        <li><code>onError</code> on reads: tell "nothing stored" from "stored but unreadable".</li>
+        <li>
+          Writes of a key land in the order they were made; IndexedDB reports a write saved only once its
+          transaction is; a burst of changes to a store is one write.
+        </li>
+        <li>
+          Fixed: Svelte stores now sync between tabs; several stores can share one storage adapter's channel;
+          <code>list(prefix)</code> and <code>getAll(table)</code> filter; large values encrypt.
+        </li>
+      </ul>
+      <p>
+        Read the
+        <a href="https://github.com/arthurgermano/storagefy/blob/main/CHANGELOG.md">changelog</a> before upgrading:
+        values written by 1.3.0 cannot be read by older versions.
+      </p>
+    </section>
+
+    <section class="strf-section">
+      <h2>About encryption</h2>
+      <p>
+        <code>encrypt: true</code> makes the stored values hard to read in the browser's tools. It does not keep a
+        secret: everything needed to decrypt ships with your app. <strong>Never store tokens, passwords or personal
+        data you must protect</strong> — keep Storagefy for preferences, carts, drafts and the like.
+      </p>
     </section>
 
     <section class="strf-section">
@@ -45,7 +79,8 @@ import Layout from "../layouts/Layout.astro";
         <h3>SessionStorageAdapter</h3>
         <p>
           Uses <code>sessionStorage</code> for persistence that lasts only for the
-          duration of the browser tab. Perfect for sensitive or temporary state.
+          duration of the browser tab — for temporary state. It is gone when the tab closes, but it does not protect
+          anything while the tab is open.
         </p>
       </div>
 
@@ -53,7 +88,8 @@ import Layout from "../layouts/Layout.astro";
         <h3>IndexedDBAdapter</h3>
         <p>
           Stores large and complex state structures asynchronously using
-          IndexedDB. Ideal for offline-first applications or large-scale state.
+          IndexedDB — the default adapter. A write is reported saved only once its transaction is; the service worker
+          of a PWA can read it too.
         </p>
       </div>
     </section>
@@ -75,10 +111,8 @@ import Layout from "../layouts/Layout.astro";
       <div class="strf-adapter">
         <h3>Svelte Store Adapter</h3>
         <p>
-          Automatically persists Svelte stores (like <code>writable</code>, <code
-            >readable</code
-          >) with minimal setup. Keeps reactivity intact and supports
-          auto-rehydration on load.
+          Persists Svelte <code>writable</code> stores with minimal setup and keeps reactivity intact. Load what was
+          kept with <code>getFromStorage</code>, then keep every change with <code>setInStorage</code>.
         </p>
       </div>
 

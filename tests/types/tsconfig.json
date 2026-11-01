@@ -1,0 +1,14 @@
+{
+  // Compiles usage.ts the way an app does: strict, against the package's published types
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "skipLibCheck": false,
+    "types": []
+  },
+  "files": ["usage.ts"]
+}

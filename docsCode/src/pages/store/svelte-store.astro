@@ -33,7 +33,8 @@ startStoragefy(&#123;
   dbName: "my-svelte-app",
   adapter: "indexedDB", // or "localStorage" or "sessionStorage"
   encrypt: true,
-  channelName: "svelte-sync" // for cross-tab synchronization
+  channelName: "svelte-sync",  // the channel the tabs talk on…
+  enableSyncTabs: true   // …and this storage tells them about its writes
 &#125;);
 
 // Create a Svelte store
@@ -175,10 +176,10 @@ ignoreKeys: [
           </li>
 
           <li>
-            <code>timeout</code>: Expiration duration in milliseconds
+            <code>timeout</code>: <strong>expiration</strong> of the stored state, in milliseconds
             <p class="strf-option-desc">
-              After this duration, the stored data will be considered expired
-              and removed. If not set, data persists indefinitely.
+              Counted again after each write. It is not a time limit of the operation: after it, the stored state is
+              gone (the store keeps what it holds in memory). If not set, the state is kept until removed.
             </p>
             <pre
               class="strf-code-block">
@@ -195,10 +196,8 @@ timeout: 300000   // expires after 5 minutes
             synchronization
             <p class="strf-option-desc">
               When <code>true</code>, changes made in one browser tab will be
-              reflected in all others in real time. Requires <code
-                >channelName</code
-              >
-              to be set during <code>startStoragefy</code>.
+              reflected in all others in real time. Requires <code>channelName</code> and <code>enableSyncTabs: true</code> on the storage adapter — without
+              both, nothing is synced and nothing warns you.
             </p>
             <pre
               class="strf-code-block">
@@ -206,7 +205,8 @@ timeout: 300000   // expires after 5 minutes
 // Enable tab sync
 startStoragefy(&#123;
   dbName: "my-app",
-  channelName: "storagefy-sync" // required for syncTabs to work
+  channelName: "storagefy-sync", // 1. the channel the tabs talk on
+  enableSyncTabs: true            // 2. this storage tells the other tabs about its writes
 &#125;);
 
 await setInStorage(myStore, "user", &#123;
@@ -215,6 +215,23 @@ await setInStorage(myStore, "user", &#123;
         </code>
       </pre>
           </li>
+          <li>
+            <code>onError</code>: called with an <code>Error</code> when the state could not be saved
+            <p class="strf-option-desc">
+              The storage is full, the encryption failed, or a change from another tab could not be read — the store
+              keeps working. <code>getFromStorage(store, key, &#123; onError &#125;)</code> also tells a stored state
+              that is there but cannot be read (another password, changed by hand).
+            </p>
+            <pre
+              class="strf-code-block">
+        <code>
+await setInStorage(myStore, "user", &#123;
+  onError: (error) => reportToMyApp(error) // error.cause holds what failed
+&#125;);
+        </code>
+      </pre>
+          </li>
+
         </ul>
       </div>
     </section>
@@ -286,8 +303,9 @@ sharedStore.update(state => (&#123; ...state, value: 'updated' &#125;));
 
       <p>
         This feature uses the <code>BroadcastChannel</code> API to synchronize changes
-        across tabs or windows. Make sure to specify a <code>channelName</code> when
-        calling <code>startStoragefy</code>.
+        across tabs or windows. The storage adapter needs <code>channelName</code> and
+        <code>enableSyncTabs: true</code> (in <code>startStoragefy</code> or its constructor). Up to 1.2.x Svelte stores
+        did not sync — fixed in 1.3.0.
       </p>
     </section>
 
@@ -318,8 +336,7 @@ sharedStore.update(state => (&#123; ...state, value: 'updated' &#125;));
           <li><code>store</code>: Svelte writable store instance</li>
           <li><code>key</code>: Storage key string</li>
           <li>
-            <code>options</code>: Configuration options (ignoreKeys, timeout,
-            syncTabs)
+            <code>options</code>: Configuration options (ignoreKeys, timeout, syncTabs, onError)
           </li>
         </ul>
         <p>Returns: Promise resolving to true on success</p>
@@ -334,11 +351,19 @@ sharedStore.update(state => (&#123; ...state, value: 'updated' &#125;));
           </li>
           <li>
             <code>getFromStorage(store, key)</code>: Loads persisted state into
-            store
+            store — <code>&#123; onError &#125;</code> tells a stored state that cannot be read
           </li>
           <li>
-            <code>destroy()</code>: Cleans up subscriptions when adapter is no
-            longer needed
+            <code>destroy(key)</code>: Stops keeping the store of <code>key</code> — no more writes, no more changes from
+            the other tabs. What is stored stays
+          </li>
+          <li>
+            <code>destroyAll()</code>: Stops keeping every store of the adapter. The storage adapter goes on
+          </li>
+          <li>
+            What the store holds is written and loaded back as it was — any JSON value (an object, an array, a
+            number, a string, a boolean). A state set to <code>null</code> or <code>undefined</code> removes the stored
+            key (a store emptied on sign-out is not loaded back)
           </li>
         </ul>
       </div>
@@ -361,8 +386,9 @@ sharedStore.update(state => (&#123; ...state, value: 'updated' &#125;));
           for preferences, shorter for temporary state)
         </li>
         <li>
-          Call <code>destroy()</code> on the adapter when you no longer need it to
-          clean up subscriptions
+          Call <code>destroy(key)</code> on the Svelte adapter when you no longer keep a store, and
+          <code>destroy()</code> on the storage adapter when you stop using it (it releases its timer, channel and
+          connection)
         </li>
         <li>
           For larger applications, consider a more structured approach to key

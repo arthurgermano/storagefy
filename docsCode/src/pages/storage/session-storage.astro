@@ -23,24 +23,25 @@ import Layout from "../../layouts/Layout.astro";
       <pre
         class="strf-code-block">
         <code>
-import SessionStorageAdapter from "storagefy";
+import &#123; SessionStorageAdapter &#125; from "storagefy";
 
 const adapter = new SessionStorageAdapter(&#123;
   dbName: "my-app",               // required - creates namespace for your keys
   encrypt: true,                  // optional, default false
   version: 1,                     // optional, default 1
-  expireCheckInterval: 2000,      // optional, default 1000ms
+  expireCheckInterval: 2000,      // optional, default 1000ms - 0 turns the timer off
   description: "Session store",   // optional
-  channelName: "session-channel"  // optional - used for sync between tabs
-  enableSyncTabs: false,          // optional, default false - Whether to enable sync automatically on change key value
+  password: "my-app-secret",      // optional - the encryption keys are derived from it (with encrypt)
+  keyDerivation: "hkdf",          // optional, default "hkdf" - "pbkdf2" only for a password the person types
+  channelName: "session-channel", // optional - the channel the tabs of the app talk on
+  enableSyncTabs: true,           // optional, default false - tell the other tabs about every write and delete
 &#125;);
         </code>
       </pre>
       <p>
-        The <code>channelName</code> enables automatic synchronization of data across
-        open tabs using the <code>CrossTabChannel</code> communication system. This
-        is particularly useful for session-based applications where you want to maintain
-        state consistency across multiple tabs within the same browser session.
+        Sync between tabs needs three settings: <code>channelName</code> and <code>enableSyncTabs</code> here, and
+        <code>syncTabs: true</code> on each store that should follow the other tabs (<code>setInStorage</code>). With
+        only <code>channelName</code>, nothing is told to the other tabs.
       </p>
     </section>
 
@@ -71,20 +72,22 @@ const adapter = new SessionStorageAdapter(&#123;
       <div class="strf-concept">
         <h3>Encryption</h3>
         <p>
-          When the <code>encrypt: true</code> option is set, all values are encrypted
-          before storage and decrypted when retrieved using the <code
-            >cryptoHelper</code
-          > module. Keys are also obfuscated to enhance security.
+          With <code>encrypt: true</code> every value is encrypted (AES-GCM, a new random IV on every write) and the
+          key names are obfuscated. It makes the values <strong>hard to read in the browser's tools</strong>; it does
+          not keep a secret — everything needed to decrypt ships with the app (with <code>password</code>, reading also
+          needs the app's secret, which is inside its JavaScript). <strong>Never store tokens or passwords.</strong>
+          The keys are derived from the password with <code>keyDerivation</code>: <code>"hkdf"</code> (default, fast)
+          or <code>"pbkdf2"</code> (slow on purpose — only for a password the person types). Each value is read the way
+          it was written, values written by 1.2.x included.
         </p>
       </div>
 
       <div class="strf-concept">
         <h3>Cross-Tab Communication</h3>
         <p>
-          When a <code>channelName</code> is provided, changes to data are broadcast
-          across browser tabs using the <code>CrossTabChannel</code> mechanism. This
-          enables real-time synchronization of state across multiple open instances
-          of your application within the same session.
+          With <code>channelName</code> and <code>enableSyncTabs: true</code>, every write and delete is told to the
+          other tabs (<code>BroadcastChannel</code>). A store follows them with <code>syncTabs: true</code>; your code
+          can listen with <code>onDataChanged</code>, which returns a function that stops listening.
         </p>
       </div>
 
@@ -146,8 +149,8 @@ const adapter = new SessionStorageAdapter(&#123;
           <code>await adapter.get(key)</code>
         </h3>
         <p>
-          Retrieves a value. Returns <code>null</code> if not found or expired. Handles
-          decryption automatically if encryption is enabled.
+          Retrieves a value. Returns <code>null</code> if not found, expired or unreadable — pass <code>&#123; onError &#125;</code> to be told a stored value could not be read (another password, changed by hand). Handles
+          decryption automatically.
         </p>
         <pre
           class="strf-code-block">
@@ -163,7 +166,7 @@ const value = await adapter.get("sessionId"); // "abc123"
           <code>await adapter.set(key, value, expire?)</code>
         </h3>
         <p>
-          Stores a value. Optional <code>expire</code> is in milliseconds from now.
+          Stores a value and answers <code>true</code> (saved), <code>false</code> (failed — e.g. storage full) or <code>null</code> (removed: the value is null, or <code>expire</code> is 0 or less). Optional <code>expire</code> is in milliseconds from now. Writes of a key land in the order they were made.
           Handles encryption automatically if enabled and broadcasts changes to other
           tabs if using a channel.
         </p>
@@ -216,7 +219,8 @@ const formData = await adapter.list("form.");
           <code>await adapter.has(key)</code>
         </h3>
         <p>
-          Returns <code>true</code> if the key exists in the session storage.
+          Returns <code>true</code> if the key exists in the session storage and
+          has not expired.
         </p>
         <pre
           class="strf-code-block">
@@ -245,8 +249,8 @@ await adapter.clear();
           <code>await adapter.reset()</code>
         </h3>
         <p>
-          Removes only data keys related to the namespace, not metadata. Useful
-          for clearing user data while preserving system configuration.
+          Removes every data key of the namespace and their expirations, not the metadata — after the writes
+          asked before it (the writes asked after wait for it).
         </p>
         <pre
           class="strf-code-block">
@@ -323,13 +327,15 @@ await adapter.clearExpire();
           <code>adapter.destroy()</code>
         </h3>
         <p>
-          Cleans up resources, stops the expiration timer, and removes event
-          listeners. Called automatically on page unload.
+          Releases the adapter once the writes already asked are done: the expiration timer, the channel between
+          tabs. Call it when you stop using the adapter — it is not used after,
+          and it is not called on page unload (a <code>beforeunload</code> listener can keep the page out of the
+          browser's back/forward cache).
         </p>
         <pre
           class="strf-code-block">
           <code>
-adapter.destroy(); // Clean up before component unmount
+await adapter.destroy(); // Clean up before component unmount
           </code>
         </pre>
       </div>
@@ -355,16 +361,19 @@ adapter.emitDataChange("wizard-state", newState, "tab-123");
           <code>adapter.onDataChanged(callback)</code>
         </h3>
         <p>
-          Registers a callback function to handle data changes from other tabs
-          or contexts.
+          Listens to the changes other tabs tell (needs <code>channelName</code> and <code>enableSyncTabs</code> in
+          the writing tab). The message carries the key and what happened — read the value again with
+          <code>get</code>. Returns a function that stops listening.
         </p>
         <pre
           class="strf-code-block">
           <code>
-adapter.onDataChanged((&#123; key, value, origin &#125;) => &#123;
-  console.log(`Session data for $&#123;key&#125; changed in tab $&#123;origin&#125;`);
-  // Update UI or app state accordingly
+const stop = adapter.onDataChanged(async (&#123; key, origin &#125;) => &#123;
+  // origin: "set", "delete" or "reset"
+  const value = await adapter.get(key); // null after a delete
 &#125;);
+
+stop(); // stops listening
           </code>
         </pre>
       </div>
@@ -401,24 +410,22 @@ async function isStepCompleted(stepNumber) &#123;
       </div>
 
       <div class="strf-advanced">
-        <h3>Session Management</h3>
-        <p>Managing user sessions with automatic expiration:</p>
+        <h3>A form draft that expires</h3>
+        <p>Keep what the person typed for 20 minutes — gone when the tab closes:</p>
         <pre
           class="strf-code-block">
           <code>
-// Store session info with expiration
-const sessionDuration = 20 * 60 * 1000; // 20 minutes
-await adapter.set("session-token", token, sessionDuration);
+const DRAFT_LIFETIME = 20 * 60 * 1000; // ms from now
 
-// Extend session on activity
-function extendSession() &#123;
-  adapter.setExpire("session-token", Date.now() + sessionDuration);
+await adapter.set("contact-draft", &#123; subject, message &#125;, DRAFT_LIFETIME);
+
+// Push the end forward while the person types
+async function keepDraft(draft) &#123;
+  await adapter.set("contact-draft", draft, DRAFT_LIFETIME);
 &#125;
 
-// Check if session is valid
-async function isSessionActive() &#123;
-  return await adapter.has("session-token");
-&#125;
+// null once it expired
+const draft = await adapter.get("contact-draft");
           </code>
         </pre>
       </div>
@@ -476,7 +483,7 @@ wizardAdapter.onDataChanged((&#123; key, value &#125;) => &#123;
           </tr>
           <tr>
             <td>Best Use Cases</td>
-            <td>Form state, wizards, temporary authentication</td>
+            <td>Form state, wizards, the state of one tab</td>
             <td>User preferences, long-term settings, cached data</td>
           </tr>
           <tr>
@@ -504,15 +511,11 @@ wizardAdapter.onDataChanged((&#123; key, value &#125;) => &#123;
           Keys are namespaced under <code>&#123;dbName&#125;__</code> to avoid conflicts.
         </li>
         <li>
-          A <code>beforeunload</code> event listener is registered to properly clean
-          up resources.
-        </li>
-        <li>
           Expirations are automatically checked and removed in intervals
           (default 1s).
         </li>
         <li>
-          Encryption only applies if enabled via <code>encrypt: true</code> option.
+          Encryption only applies with <code>encrypt: true</code>, and only makes reading harder — never store tokens or passwords.
         </li>
         <li>
           The adapter handles browser storage limits gracefully with error

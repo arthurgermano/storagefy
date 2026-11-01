@@ -248,13 +248,11 @@ describe("LocalStorageAdapter", () => {
       await adapter.set("apple_pie", "sweet");
       await adapter.set("banana", "yellow");
 
-      const appleOnly = await adapter.list();
+      const appleOnly = await adapter.list("apple_");
       const keys = appleOnly.map((entry) => entry.key);
 
-      expect(keys).toContain("apple_fruit");
-      expect(keys).toContain("apple_pie");
-      expect(keys).toContain("banana");
-      expect(appleOnly.length).toBe(3);
+      // Only the keys that start with the prefix (up to 1.2.x the prefix was ignored and every key came back)
+      expect(keys.sort()).toEqual(["apple_fruit", "apple_pie"]);
     });
 
     // --------------------------------------------------------------------------------------------

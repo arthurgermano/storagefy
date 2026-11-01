@@ -251,10 +251,8 @@ describe("SessionStorageAdapter", () => {
       const appleOnly = await adapter.list("apple_");
       const keys = appleOnly.map((entry) => entry.key);
 
-      expect(keys).toContain("apple_fruit");
-      expect(keys).toContain("apple_pie");
-      expect(keys).toContain("banana");
-      expect(appleOnly.length).toBe(3);
+      // Only the keys that start with the prefix (up to 1.2.x the prefix was ignored and every key came back)
+      expect(keys.sort()).toEqual(["apple_fruit", "apple_pie"]);
     });
 
     // --------------------------------------------------------------------------------------------
@@ -442,16 +440,20 @@ describe("SessionStorageAdapter", () => {
 
     // --------------------------------------------------------------------------------------------
 
-    it("should return all items from a specific table", async () => {
+    it("should return only the items of the table asked for", async () => {
+      // Up to 1.2.x the table was ignored and every item came back
       const users = await adapter.getAll("users");
 
       expect(users).toEqual([
         { key: "users__1", value: { name: "Alice" } },
         { key: "users__2", value: { name: "Bob" } },
         { key: "users__3", value: { name: "Carol" } },
-        { key: "products__1", value: { name: "Keyboard" } },
-        { key: "products__2", value: { name: "Mouse" } },
       ]);
+    });
+
+    it("should return every item when no table is given", async () => {
+      const all = await adapter.getAll();
+      expect(all.map((entry) => entry.key).sort()).toEqual(["products__1", "products__2", "users__1", "users__2", "users__3"]);
     });
 
     // --------------------------------------------------------------------------------------------

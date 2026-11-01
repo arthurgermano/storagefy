@@ -1,6 +1,6 @@
 import { writable } from "svelte/store";
 // import * as Storagefy from "storagefy";
-import * as Storagefy from "../../../../../dist/index.cjs";
+import * as Storagefy from "../../../../../dist/index.js";
 
 // ------------------------------------------------------------------------------------------------
 

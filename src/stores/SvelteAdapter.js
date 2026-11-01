@@ -1,221 +1,109 @@
 import StoreAdapter from "./StoreAdapter.js";
-import { assign } from "misc-helpers";
-import { logError, logInfo } from "../helpers/loggerHelper.js";
+import { logError } from "../helpers/loggerHelper.js";
 
 // ------------------------------------------------------------------------------------------------
 
 /**
- * Svelte store adapter that syncs Svelte writable stores with persistent storage.
- * Provides seamless integration between Svelte's store contract and various storage backends.
+ * Svelte storage adapter: keeps a Svelte writable store's value in a storage adapter.
  * @class SvelteAdapter
  * @extends StoreAdapter
  * @example
- * // Basic usage with a Svelte writable store
- * import { writable } from 'svelte/store';
- * import { IndexedDBAdapter } from 'storagefy';
- *
- * const userStore = writable({});
- * const svelteAdapter = new SvelteAdapter(new IndexedDBAdapter({ dbName: 'svelte-app' }));
- *
- * // Persist store state
- * await svelteAdapter.setInStorage(userStore, 'user-data');
- *
- * // Hydrate store from storage
- * await svelteAdapter.getFromStorage(userStore, 'user-data');
+ * import { writable } from "svelte/store";
+ * const userStore = writable({ name: "" });
+ * const svelteAdapter = new SvelteAdapter(new LocalStorageAdapter({ dbName: "my-app" }));
+ * await svelteAdapter.getFromStorage(userStore, "user-data");
+ * await svelteAdapter.setInStorage(userStore, "user-data");
  */
 class SvelteAdapter extends StoreAdapter {
   /**
-   * Creates a SvelteAdapter instance.
-   * @param {StoreAdapter} adapter The storage adapter to use for persistence (IndexedDB, LocalStorage, etc.)
-   * @throws {Error} Throws if no adapter is provided
+   * @param {import("../adapters/StorageAdapter.js").default} adapter - The storage adapter.
+   * @throws {Error} If no storage adapter is given.
    */
   constructor(adapter) {
-    super();
-    if (!adapter) {
-      logError("Adapter provided is not defined");
-      throw new Error("Adapter provided is not defined");
-    }
-    this.adapter = adapter;
-    this.stores = {};
+    super(adapter);
   }
 
   // ----------------------------------------------------------------------------------------------
 
   /**
-   * Registers a listener on the adapter to respond to external data changes,
-   * ensuring the connected store is synchronized with updates that come
-   * from other sources (e.g., different tabs or windows).
-   *
+   * The store's value now.
    * @private
-   * @param {String} key - The key to register the listener for
+   * @param {any} store
+   * @returns {any}
    */
-  _registerOnDataChanged(key) {
-    logInfo("SvelteAdapter - Registering onDataChanged listener");
-    if (!key || !this.stores || !this.stores[key]) {
-      return;
-    }
-    try {
-      if (!store) {
-        return;
-      }
-      this.adapter.onDataChanged(async (data) => {
-        if (data.adapterId == this.adapter.adapterId || !data.origin) {
-          return;
-        }
-
-        if (
-          !this.stores ||
-          !this.stores[data.key] ||
-          !this.stores[data.key].store
-        ) {
-          return;
-        }
-
-        let currentState;
-        const unsubscribe = this.stores[data.key].store.subscribe((value) => {
-          currentState = assign({}, value);
-        });
-        unsubscribe();
-
-        let dataToPatch;
-        if (!data.value) {
-          dataToPatch = await this.adapter.get(data.key);
-        } else {
-          dataToPatch = await this.adapter._decrypt(data.key, data.value);
-        }
-        if (JSON.stringify(currentState) === JSON.stringify(dataToPatch)) {
-          return;
-        }
-
-        // Update store with the patched data
-        // In Svelte, we update the store directly
-        this.stores[data.key].store.update((currentState) => ({
-          ...currentState,
-          ...dataToPatch,
-          STORAGEFY_SILENT_CHANNEL_UPDATE: true,
-        }));
-      });
-    } catch (error) {
-      logError("SvelteAdapter - onDataChanged error:", error);
-      throw error;
-    }
+  _valueOf(store) {
+    let value;
+    store.subscribe((current) => {
+      value = current;
+    })();
+    return value;
   }
 
   // ----------------------------------------------------------------------------------------------
 
   /**
-   * Syncs a Svelte store to persistent storage and sets up subscription for future changes.
-   * @async
-   * @param {Object} store Svelte writable store instance
-   * @param {string} key Storage key to use
-   * @param {Object} [options={}] Configuration options
-   * @param {string[]} [options.ignoreKeys=[]] Keys to exclude from persistence
-   * @param {number} [options.timeout] Operation timeout in milliseconds
-   * @param {Function} [options.onError] Called with an Error on every write that fails (storage full, encryption
-   *   failure…) — the store keeps working, but its state was not saved
-   * @returns {Promise<boolean>} Resolves to true when initial sync completes
-   * @throws {Error} Throws if store is invalid or persistence fails
-   * @example
-   * // Persist store while ignoring sensitive fields
-   * await svelteAdapter.setInStorage(userStore, 'user-profile', {
-   *   ignoreKeys: ['password', 'token'],
-   *   timeout: 2000
-   * });
+   * Writes the store's value now and on every change after (see StoreAdapter._persist) — any value: an object, an
+   * array, a number, a string, a boolean. null or undefined removes the stored key (a store emptied on sign-out is not
+   * loaded back).
+   * @param {any} store - A Svelte writable store.
+   * @param {string} key - Storage key.
+   * @param {import("./StoreAdapter.js").SetInStorageOptions} [options]
+   * @returns {Promise<boolean>} true once the value is written for the first time (or found empty).
+   * @throws {Error} If it is not a writable store, or the first write threw.
    */
   async setInStorage(store, key, options = {}) {
-    try {
-      logInfo("SvelteAdapter - setInStorage - key:", key);
-      this._checkStore(store);
-      options.ignoreKeys = options.ignoreKeys || [];
+    this._checkStore(store);
+    const kept = this._keep(key, store, options);
 
-      if (
-        this.stores[key] &&
-        this.stores[key].unsubscribe &&
-        typeof this.stores[key].unsubscribe === "function"
-      ) {
-        this.stores[key].unsubscribe();
-      }
-      delete this.stores[key];
-
-      this.stores[key] = {
-        key,
-        options,
-        store,
-        unsubscribe: null,
-      };
-
-      return new Promise((resolve, reject) => {
-        this.stores[key].unsubscribe = store.subscribe(async (state) => {
-          try {
-            if (!state) {
-              return resolve(true);
-            }
-
-            const stateProps = this.omitKeys(state, options.ignoreKeys);
-            const written = await this.adapter.set(key, stateProps, options.timeout);
-            if (written === false) {
-              this._reportWriteFailure(key, options);
-            }
-            return resolve(true);
-          } catch (error) {
-            this._reportWriteFailure(key, options, error);
-            return reject(error);
-          }
-        });
-
-        if (options.syncTabs) {
-          this._registerOnDataChanged(key);
+    return new Promise((resolve, reject) => {
+      // A Svelte store calls its subscriber at once with the value it holds: that is the first write
+      kept.unsubscribe = store.subscribe((state) => {
+        const write = this._onChange(kept, state);
+        if (!write) {
+          resolve(true);
+          return;
         }
+        write.then(() => resolve(true), reject);
       });
-    } catch (error) {
-      logError(error);
-      throw error;
-    }
+
+      this._listenToTabs(
+        kept,
+        () => this._valueOf(store),
+        (incoming) => store.update((current) => this._merged(current, incoming)),
+      );
+    });
   }
 
   // ----------------------------------------------------------------------------------------------
 
   /**
-   * Hydrates a Svelte store from persistent storage.
-   * @async
-   * @param {Object} store Svelte writable store instance to hydrate
-   * @param {string} key Storage key to load from
-   * @returns {Promise<boolean>} Resolves to true on success, undefined if no data found
-   * @throws {Error} Throws if store is invalid or update fails
-   * @example
-   * // Load persisted state into store
-   * await svelteAdapter.getFromStorage(userStore, 'user-profile');
+   * Loads persisted state into a Svelte store.
+   * @param {any} store - A Svelte writable store.
+   * @param {string} key - Storage key.
+   * @param {import("./StoreAdapter.js").GetFromStorageOptions} [options]
+   * @returns {Promise<true|undefined>} true when a state was loaded; undefined when there was none.
+   * @throws {Error} If it is not a writable store.
    */
-  async getFromStorage(store, key) {
-    try {
-      logInfo("SvelteAdapter - getFromStorage - key:", key);
-      this._checkStore(store);
-      const storage = await this.adapter.get(key);
-      if (!storage) {
-        return;
-      }
-      store.set(assign({}, storage));
-      return true;
-    } catch (error) {
-      logError(error);
-      throw error;
+  async getFromStorage(store, key, options = {}) {
+    this._checkStore(store);
+    const storage = await this.adapter.get(key, { onError: options.onError });
+    if (storage === null) {
+      return;
     }
+    // Read from storage just now: a value of its own, shared with nothing
+    store.set(storage);
+    return true;
   }
 
   // ----------------------------------------------------------------------------------------------
 
   /**
-   * Validates that a store conforms to Svelte's writable store contract.
    * @private
-   * @param {Object} store Store instance to validate
-   * @throws {Error} Throws if store doesn't have required subscribe and set methods
+   * @param {any} store
+   * @throws {Error} If it is not a Svelte writable store.
    */
   _checkStore(store) {
-    if (
-      !store ||
-      typeof store.subscribe !== "function" ||
-      typeof store.set !== "function"
-    ) {
+    if (!store || typeof store.subscribe !== "function" || typeof store.set !== "function") {
       logError("Store provided is not a valid Svelte writable store");
       throw new Error("Store provided is not a valid Svelte writable store");
     }

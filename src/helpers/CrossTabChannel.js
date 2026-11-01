@@ -36,27 +36,28 @@ class CrossTabChannel {
   // ------------------------------------------------------------------------------------------------
 
   /**
-   * Subscribes to incoming messages on the channel.
-   * The callback will be called with the message data whenever another tab posts a message.
+   * Listens for the messages other tabs post. Every listener gets every message — adapters of several stores can
+   * share one channel.
    *
-   * @param {Function} callback - A function that handles incoming message data.
+   * @param {(data: any) => void} callback - Called with each message's data; an error it throws is logged.
+   * @returns {() => void} Stops this listener.
    */
   subscribe(callback) {
     if (typeof callback !== "function") {
       logWarn("CrossTabChannel.subscribe: Provided callback is not a function.");
-      return;
+      return () => {};
     }
-
-    this.channel.onmessage = (event) => {
-      logInfo("CrossTabChannel - Received message:", event.data);
+    const listener = (event) => {
       try {
         callback(event.data);
       } catch (error) {
         logError("Error in CrossTabChannel subscriber callback:", error);
       }
     };
-
-    logInfo("CrossTabChannel - Subscribed to incoming messages.");
+    this.channel.addEventListener("message", listener);
+    return () => {
+      this.channel.removeEventListener("message", listener);
+    };
   }
 
   // ------------------------------------------------------------------------------------------------

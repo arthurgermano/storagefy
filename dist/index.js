@@ -4,6 +4,7 @@ import SessionStorageAdapter from "./adapters/SessionStorageAdapter.js";
 import PiniaAdapter from "./stores/PiniaAdapter.js";
 import ReactAdapter from "./stores/ReactAdapter.js";
 import SvelteAdapter from "./stores/SvelteAdapter.js";
+import { logError } from "./helpers/loggerHelper.js";
 const DEFAULT_CONFIG = {
   dbName: "storagefy",
   storeName: "storagefy_db",
@@ -19,29 +20,30 @@ let reactAdapter;
 let svelteAdapter;
 function startStoragefy(config = {}) {
   const params = { ...DEFAULT_CONFIG, ...config };
-  if (!config.forceRecreate && storageAdapter) {
+  if (config.fresh) {
+    return _createStorageAdapter(params);
+  }
+  if (storageAdapter && !config.forceRecreate) {
     return storageAdapter;
   }
-  switch (params.adapter) {
-    case "localStorage":
-      if (config.fresh) {
-        return new LocalStorageAdapter(params);
-      }
-      storageAdapter = new LocalStorageAdapter(params);
-      break;
-    case "sessionStorage":
-      if (config.fresh) {
-        return new SessionStorageAdapter(params);
-      }
-      storageAdapter = new SessionStorageAdapter(params);
-      break;
-    default:
-      if (config.fresh) {
-        return new IndexedDBAdapter(params);
-      }
-      storageAdapter = new IndexedDBAdapter(params);
+  if (storageAdapter) {
+    _retireStorageAdapter(storageAdapter);
   }
+  storageAdapter = _createStorageAdapter(params);
   return storageAdapter;
+}
+function _retireStorageAdapter(replaced) {
+  const over = (kept) => {
+    if (kept?.adapter !== replaced) {
+      return kept;
+    }
+    kept.destroyAll();
+    return void 0;
+  };
+  piniaAdapter = over(piniaAdapter);
+  reactAdapter = over(reactAdapter);
+  svelteAdapter = over(svelteAdapter);
+  void replaced.destroy();
 }
 function getStorageAdapter() {
   if (!storageAdapter) {
@@ -50,6 +52,9 @@ function getStorageAdapter() {
   return storageAdapter;
 }
 function _getFrameworkAdapter({ adapter, adapterParams, forceRecreate }, cachedAdapter, AdapterClass) {
+  if (forceRecreate) {
+    cachedAdapter?.destroyAll();
+  }
   if (adapter) {
     return new AdapterClass(adapter);
   }
@@ -57,8 +62,7 @@ function _getFrameworkAdapter({ adapter, adapterParams, forceRecreate }, cachedA
     return cachedAdapter;
   }
   if (adapterParams) {
-    const storageAdapter2 = _createStorageAdapter(adapterParams);
-    return new AdapterClass(storageAdapter2);
+    return new AdapterClass(_createStorageAdapter(adapterParams));
   }
   if (!storageAdapter) {
     throw new Error("Storage adapter not initialized. Call startStoragefy first.");
@@ -79,11 +83,7 @@ function getPiniaAdapter({ adapter = null, adapterParams = null, forceRecreate =
   if (fresh) {
     return _getFrameworkAdapter({ adapter, adapterParams, forceRecreate }, null, PiniaAdapter);
   }
-  piniaAdapter = _getFrameworkAdapter(
-    { adapter, adapterParams, forceRecreate },
-    piniaAdapter,
-    PiniaAdapter
-  );
+  piniaAdapter = _getFrameworkAdapter({ adapter, adapterParams, forceRecreate }, piniaAdapter, PiniaAdapter);
   return {
     setInStorage: piniaAdapter.setInStorage.bind(piniaAdapter),
     getFromStorage: piniaAdapter.getFromStorage.bind(piniaAdapter)
@@ -93,77 +93,42 @@ function getReactAdapter({ adapter = null, adapterParams = null, forceRecreate =
   if (fresh) {
     return _getFrameworkAdapter({ adapter, adapterParams, forceRecreate }, null, ReactAdapter);
   }
-  reactAdapter = _getFrameworkAdapter(
-    { adapter, adapterParams, forceRecreate },
-    reactAdapter,
-    ReactAdapter
-  );
+  reactAdapter = _getFrameworkAdapter({ adapter, adapterParams, forceRecreate }, reactAdapter, ReactAdapter);
   return reactAdapter;
 }
 function getSvelteAdapter({ adapter = null, adapterParams = null, forceRecreate = false, fresh = false } = {}) {
   if (fresh) {
     return _getFrameworkAdapter({ adapter, adapterParams, forceRecreate }, null, SvelteAdapter);
   }
-  svelteAdapter = _getFrameworkAdapter(
-    { adapter, adapterParams, forceRecreate },
-    svelteAdapter,
-    SvelteAdapter
-  );
+  svelteAdapter = _getFrameworkAdapter({ adapter, adapterParams, forceRecreate }, svelteAdapter, SvelteAdapter);
   return svelteAdapter;
 }
-async function setPiniaStorage(store, key, options = {}) {
+async function _loadAndKeep(storeAdapter, store, key, options) {
   try {
-    if (!piniaAdapter) {
-      getPiniaAdapter();
-    }
     if (!store) {
       throw new Error("Store is required.");
     }
     if (!key) {
       throw new Error("Key is required.");
     }
-    await piniaAdapter.getFromStorage(store, key);
-    await piniaAdapter.setInStorage(store, key, options);
+    await storeAdapter.getFromStorage(store, key, { onError: options.onError });
+    await storeAdapter.setInStorage(store, key, options);
   } catch (error) {
     logError(error);
     throw error;
   }
+}
+async function setPiniaStorage(store, key, options = {}) {
+  piniaAdapter ??= _getFrameworkAdapter({}, null, PiniaAdapter);
+  await _loadAndKeep(piniaAdapter, store, key, options);
 }
 async function setReactStorage(store, key, options = {}) {
-  try {
-    if (!reactAdapter) {
-      getReactAdapter();
-    }
-    if (!store) {
-      throw new Error("Store is required.");
-    }
-    if (!key) {
-      throw new Error("Key is required.");
-    }
-    await reactAdapter.getFromStorage(store, key);
-    await reactAdapter.setInStorage(store, key, options);
-  } catch (error) {
-    logError(error);
-    throw error;
-  }
+  reactAdapter ??= _getFrameworkAdapter({}, null, ReactAdapter);
+  await _loadAndKeep(reactAdapter, store, key, options);
 }
 async function setSvelteStorage(store, key, options = {}) {
-  try {
-    if (!svelteAdapter) {
-      getSvelteAdapter();
-    }
-    if (!store) {
-      throw new Error("Store is required.");
-    }
-    if (!key) {
-      throw new Error("Key is required.");
-    }
-    await svelteAdapter.getFromStorage(store, key);
-    await svelteAdapter.setInStorage(store, key, options);
-  } catch (error) {
-    logError(error);
-    throw error;
-  }
+  svelteAdapter ??= _getFrameworkAdapter({}, null, SvelteAdapter);
+  await _loadAndKeep(svelteAdapter, store, key, options);
 }
 export {
   IndexedDBAdapter,

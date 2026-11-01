@@ -8,8 +8,8 @@ import SessionStorageAdapter from "../../src/adapters/SessionStorageAdapter.js";
 import IndexedDBAdapter from "../../src/adapters/IndexedDBAdapter.js";
 
 // ------------------------------------------------------------------------------------------------
-// The AES key of each storage key is derived once per adapter (PBKDF2 is slow on purpose) — and what is stored is
-// exactly what it was before the key was kept: a value written by one version opens in the other.
+// The AES key of each storage key is derived once per adapter and key derivation — and a value written by 1.2.x
+// (PBKDF2, the old format) still opens.
 // ------------------------------------------------------------------------------------------------
 
 vi.mock("../../src/helpers/cryptoHelper.js", async (importOriginal) => {
@@ -24,13 +24,13 @@ function derivationsOf(key) {
   return cryptoHelper.deriveKey.mock.calls.filter(([password]) => password === key).length;
 }
 
-/** A value as the previous version stored it: a fresh derivation for every write */
+/** A value as 1.2.x stored it: PBKDF2, the JSON text encrypted as a JSON string */
 async function encryptLikeBefore(key, value) {
   const cKey = await realDeriveKey(key);
   return JSON.stringify(await cryptoHelper.encryptData(cKey, JSON.stringify(value), false));
 }
 
-/** A stored value opened as the previous version did */
+/** A stored value opened as 1.2.x did */
 async function decryptLikeBefore(key, stored) {
   const cKey = await realDeriveKey(key);
   return JSON.parse(await cryptoHelper.decryptData(cKey, JSON.parse(stored), false));
@@ -105,13 +105,25 @@ describe.each(Object.keys(adapters))("%s — the derived key is kept", (name) =>
   });
 
   if (setup.raw !== null) {
-    it("stores what the previous version stored — it opens the old way", async () => {
+    it("writes the format of 1.3.0 — it says how its key was derived (HKDF by default)", async () => {
       const adapter = setup.create();
       await adapter.set("session", { validUntil: 7 });
 
-      const stored = setup.raw().getItem(adapter._fullKey("session"));
+      const stored = JSON.parse(setup.raw().getItem(adapter._fullKey("session")));
 
-      expect(await decryptLikeBefore("session", stored)).toEqual({ validUntil: 7 });
+      expect(Object.keys(stored).sort()).toEqual(["data", "iv", "kdf", "v"]);
+      expect(stored).toMatchObject({ v: 2, kdf: "hkdf" });
+      await expect(decryptLikeBefore("session", JSON.stringify(stored))).rejects.toThrow();
+    });
+
+    it("writes again in the format of 1.3.0 a value the previous version stored", async () => {
+      const adapter = setup.create();
+      setup.raw().setItem(adapter._fullKey("session"), await encryptLikeBefore("session", { validUntil: 9 }));
+
+      await adapter.set("session", { validUntil: 10 });
+
+      expect(JSON.parse(setup.raw().getItem(adapter._fullKey("session")))).toMatchObject({ v: 2, kdf: "hkdf" });
+      expect(await adapter.get("session")).toEqual({ validUntil: 10 });
     });
 
     it("opens what the previous version stored", async () => {

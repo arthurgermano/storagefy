@@ -1,14 +1,27 @@
-Test Changes
-root folder run: npm run test
+Test changes (root folder)
+  npm test                 every test, watching
+  npm run test:coverage    every test once — fails below 100% coverage
+  npm run test:browser     the published package in Chromium, Firefox and WebKit, with real tabs (Playwright)
+  Run `npm run build` first: the tests of the published package, of its types and in the browsers read dist/
+  Once per machine, for the browser tests: npx playwright install chromium firefox webkit
+    (and, on Linux, sudo npx playwright install-deps chromium firefox webkit)
 
-Build Project Source Code
-root folder run: npm run build
+Build the library (root folder)
+  npm run build            dist/ (ESM one file per module, CommonJS bundle, types from the JSDoc)
 
-Build Docs
-docsCode folder run: npm run deploy
+Before publishing
+  1. npm run build && npm run test:coverage && npm run test:browser
+  2. npm pack, install the tarball in a clean folder, import it (ESM and CommonJS)
+  3. validate in an app that uses it (types, build, size)
+  4. update CHANGELOG.md and the site (docsCode) for what changed
+  5. publish: npm publish — then compare the published shasum with the packed one (npm view storagefy@<version> dist.shasum)
 
-Test Docs
-docsCode folder run: npm run preview
+Docs site (docsCode folder)
+  npm install              once
+  npm run dev              live, on localhost
+  npm run generate         builds the site into ../docs
+  npm run preview          serves ../docs as published
+  npm run deploy           generate + publish ../docs to GitHub Pages (gh-pages branch)
 
 Change version
-package.json change version
+  package.json "version", and a new section at the top of CHANGELOG.md

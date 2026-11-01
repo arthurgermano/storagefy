@@ -1,381 +1,200 @@
-import StoreAdapter from "./StoreAdapter.js";
-import { assign } from "misc-helpers";
-import { logError, logInfo } from "../helpers/loggerHelper.js";
+import StoreAdapter, { isPlainObject } from "./StoreAdapter.js";
+import { logError } from "../helpers/loggerHelper.js";
+
+// ------------------------------------------------------------------------------------------------
+
+/** The ways of reading or setting a store this adapter uses — a store needs one of them */
+const STATE_METHODS = ["getState", "setState", "get", "set", "update"];
 
 // ------------------------------------------------------------------------------------------------
 
 /**
- * React state persistence adapter that syncs React state management stores with a storage backend.
- * Supports Redux, Zustand, and other React state management libraries with compatible interfaces.
+ * React state persistence adapter: keeps the state of a Redux, Zustand or compatible store (one with subscribe and
+ * getState/setState) in a storage adapter.
  * @class ReactAdapter
  * @extends StoreAdapter
  * @example
- * // Basic usage with Redux and IndexedDB
- * const reduxAdapter = new ReactAdapter(new IndexedDBAdapter({ dbName: 'app-state' }));
- * await reduxAdapter.setInStorage(store, 'redux-state');
- * await reduxAdapter.getFromStorage(store, 'redux-state');
+ * // Redux and IndexedDB
+ * const reduxAdapter = new ReactAdapter(new IndexedDBAdapter({ dbName: "app-state" }));
+ * await reduxAdapter.getFromStorage(store, "redux-state");
+ * await reduxAdapter.setInStorage(store, "redux-state");
  *
- * // Usage with Zustand
- * const zustandAdapter = new ReactAdapter(new LocalStorageAdapter());
- * await zustandAdapter.setInStorage(useStore, 'zustand-state');
+ * // Zustand
+ * const zustandAdapter = new ReactAdapter(new LocalStorageAdapter({ dbName: "app-state" }));
+ * await zustandAdapter.setInStorage(useStore, "zustand-state");
  */
 class ReactAdapter extends StoreAdapter {
   /**
-   * Creates a ReactAdapter instance.
-   * @param {StoreAdapter} adapter The storage adapter to use for persistence (IndexedDB, LocalStorage, etc.)
-   * @throws {Error} Throws if no adapter is provided
+   * @param {import("../adapters/StorageAdapter.js").default} adapter - The storage adapter.
+   * @throws {Error} If no storage adapter is given.
    */
   constructor(adapter) {
-    super();
-    if (!adapter) {
-      logError("Adapter provided is not defined");
-      throw new Error("Adapter provided is not defined");
-    }
-    this.adapter = adapter;
-    this.stores = {};
-  }
-
-  // ----------------------------------------------------------------------------------------------
-
-  _getPayload(current, payload) {
-    return {
-      ...current,
-      ...payload,
-      STORAGEFY_SILENT_CHANNEL_UPDATE: true,
-    };
+    super(adapter);
   }
 
   // ----------------------------------------------------------------------------------------------
 
   /**
-   * Registers a listener on the adapter to respond to external data changes,
-   * ensuring the connected store is synchronized with updates that come
-   * from other sources (e.g., different tabs or windows).
-   *
+   * Sets a whole state with setState: an object is merged as setState does; anything else (an array, a number…)
+   * replaces the state — merged, an array would become an object.
    * @private
-   * @param {Object} store - A reactive store (e.g., a Redux, Jotai, Zustand or Custom store) that will be updated when external changes occur.
+   * @param {any} store
+   * @param {any} state
    */
-  _registerOnDataChanged(key) {
-    if (!key || !this.stores || !this.stores[key]) {
+  _setState(store, state) {
+    if (isPlainObject(state)) {
+      store.setState(state);
+    } else {
+      store.setState(state, true);
+    }
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * The store's state now, as far as its interface tells.
+   * @private
+   * @param {any} store
+   * @returns {any}
+   */
+  _currentOf(store) {
+    if (typeof store.getState === "function") return store.getState();
+    if (typeof store.get === "function") return store.get();
+    return {};
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * Puts another tab's state in the store, the way its library updates.
+   * @private
+   * @param {any} store
+   * @param {object} incoming
+   */
+  _apply(store, incoming) {
+    // Redux: an action the store's reducer may handle (STORAGEFY_UPDATE)
+    if (typeof store.dispatch === "function" && typeof store.getState === "function") {
+      store.dispatch({ type: "STORAGEFY_UPDATE", payload: this._merged(store.getState(), incoming) });
       return;
     }
-    logInfo("ReactAdapter - Registering onDataChanged listener");
-    this.adapter.onDataChanged(async (data) => {
-      try {
-        // Skip if the data change originated from this adapter or has no origin
-        if (data.adapterId == this.adapter.adapterId || !data.origin) {
-          return;
-        }
-
-        if (
-          !this.stores ||
-          !this.stores[data.key] ||
-          !this.stores[data.key].store
-        ) {
-          return;
-        }
-        const store = this.stores[data.key].store;
-
-        let dataToPatch;
-        if (!data.value) {
-          dataToPatch = await this.adapter.get(data.key);
-        } else {
-          dataToPatch = await this.adapter._decrypt(data.key, data.value);
-        }
-
-        // Redux store (has dispatch and getState methods)
-        if (
-          typeof store.dispatch === "function" &&
-          typeof store.getState === "function"
-        ) {
-          const currentState = store.getState();
-          if (JSON.stringify(currentState) === JSON.stringify(dataToPatch)) {
-            return;
-          }
-
-          store.dispatch({
-            type: "STORAGEFY_UPDATE",
-            payload: this._getPayload(currentState, dataToPatch),
-          });
-          return;
-        }
-
-        // Zustand store
-        if (
-          typeof store.getState === "function" &&
-          typeof store.setState === "function"
-        ) {
-          const currentState = store.getState();
-          if (JSON.stringify(currentState) === JSON.stringify(dataToPatch)) {
-            return;
-          }
-          store.setState(this._getPayload(currentState, dataToPatch));
-          return;
-        }
-
-        // JOTAI
-        if (
-          typeof store.set === "function" &&
-          typeof store.get === "function"
-        ) {
-          const currentState = store.get();
-          if (JSON.stringify(currentState) === JSON.stringify(dataToPatch)) {
-            return;
-          }
-
-          store.set(this._getPayload(currentState, dataToPatch));
-          return;
-        }
-
-        if (typeof store.update === "function") {
-          store.update((state) => {
-            if (JSON.stringify(state) === JSON.stringify(dataToPatch)) {
-              return state;
-            }
-            return this._getPayload(state, dataToPatch);
-          });
-          return;
-        }
-
-        // Last resort: try to find a method to update the store
-        const currentState =
-          typeof store.getState === "function"
-            ? store.getState()
-            : typeof store.get === "function"
-              ? store.get()
-              : {};
-
-        if (JSON.stringify(currentState) === JSON.stringify(dataToPatch)) {
-          return;
-        }
-
-        if (typeof store.set === "function") {
-          store.set(this._getPayload(currentState, dataToPatch));
-        } else {
-          logError("Unable to update store: No compatible update method found");
-        }
-      } catch (error) {
-        logError("Error in _registerOnDataChanged:", error);
-      }
-    });
+    // Zustand and stores shaped like it
+    if (typeof store.getState === "function" && typeof store.setState === "function") {
+      this._setState(store, this._merged(store.getState(), incoming));
+      return;
+    }
+    if (typeof store.update === "function") {
+      store.update((state) => this._merged(state, incoming));
+      return;
+    }
+    if (typeof store.set === "function") {
+      store.set(this._merged(this._currentOf(store), incoming));
+      return;
+    }
+    logError("Unable to update store: No compatible update method found");
   }
 
   // ----------------------------------------------------------------------------------------------
 
   /**
-   * Syncs React store state to persistent storage and sets up subscription for future changes.
-   * Supports both Redux-style (getState/subscribe) and Zustand-style stores.
-   * @async
-   * @param {Object} store React state store instance (Redux, Zustand, etc.)
-   * @param {string} key Storage key to use
-   * @param {Object} [options={}] Configuration options
-   * @param {string[]} [options.ignoreKeys=[]] Keys to exclude from persistence
-   * @param {number} [options.timeout] Operation timeout in milliseconds
-   * @param {Function} [options.onError] Called with an Error on every write that fails (storage full, encryption
-   *   failure…) — the store keeps working, but its state was not saved
-   * @returns {Promise<boolean>} Resolves to true when subscription is established
-   * @throws {Error} Throws if store is invalid or unsupported
+   * Writes the store's state on every change (see StoreAdapter._persist) — and at once for a store that tells its
+   * state (getState), as Redux and Zustand do. A null or undefined state removes the stored key. The state is read
+   * with getState, or get; a store with neither is read from what it passes its listeners — a notification that
+   * passes nothing writes nothing.
+   * @param {any} store - A Redux, Zustand or compatible store.
+   * @param {string} key - Storage key.
+   * @param {import("./StoreAdapter.js").SetInStorageOptions} [options]
+   * @returns {Promise<boolean>} true once the store is subscribed to and its state written (a store without getState
+   *   is written on its first change).
+   * @throws {Error} If the store is not supported.
    * @example
-   * // Persist Redux store while ignoring sensitive data
-   * await reactAdapter.setInStorage(reduxStore, 'user-state', {
-   *   ignoreKeys: ['authToken', 'password'],
-   *   timeout: 3000
-   * });
-   *
-   * // Persist Zustand store
-   * await reactAdapter.setInStorage(zustandStore, 'app-settings');
+   * await reactAdapter.setInStorage(reduxStore, "user-state", { ignoreKeys: ["draft"] });
    */
   async setInStorage(store, key, options = {}) {
-    try {
-      logInfo("ReactAdapter - setInStorage - key:", key);
-      this._checkStore(store);
-      options.ignoreKeys = options.ignoreKeys || [];
+    this._checkStore(store);
+    const kept = this._keep(key, store, options);
 
-      if (
-        this.stores[key] &&
-        this.stores[key].unsubscribe &&
-        typeof this.stores[key].unsubscribe === "function"
-      ) {
-        this.stores[key].unsubscribe();
-      }
-      delete this.stores[key];
+    /** @returns {Promise<void>} the write of this state (see StoreAdapter._onChange) — a failed one was told through onError */
+    const handleStateChange = (state) => (this._onChange(kept, state) ?? Promise.resolve()).catch(() => {});
 
-      this.stores[key] = {
-        key,
-        options,
-        store,
-        unsubscribe: null,
-      };
-
-      return new Promise((resolve, reject) => {
-        const handleStateChange = async (state) => {
-          try {
-            if (!state) return;
-            if (state.STORAGEFY_SILENT_CHANNEL_UPDATE) {
-              delete state.STORAGEFY_SILENT_CHANNEL_UPDATE;
-              return resolve(true);
-            }
-
-            const stateProps = this.omitKeys(state, options.ignoreKeys);
-
-            const written = await this.adapter.set(key, stateProps, options.timeout);
-            if (written === false) {
-              this._reportWriteFailure(key, options);
-            }
-          } catch (error) {
-            // Don't reject the main promise here — told through onError (and the log)
-            this._reportWriteFailure(key, options, error);
-          }
-        };
-
-        // For Redux-style stores
-        if (
-          typeof store.subscribe === "function" &&
-          typeof store.getState === "function"
-        ) {
-          // Initial sync
-          handleStateChange(store.getState());
-
-          // Subscribe to changes
-          this.stores[key].unsubscribe = store.subscribe(() => {
-            handleStateChange(store.getState());
-          });
-        }
-        // For Zustand/useState-style stores
-        else if (typeof store.subscribe === "function") {
-          this.stores[key].unsubscribe = store.subscribe(handleStateChange);
-        } else {
-          reject(new Error("Unsupported store type"));
-          return;
-        }
-
-        // Resolve immediately after subscription is set up
-        if (options.syncTabs) {
-          this._registerOnDataChanged(key);
-        }
-        resolve(true);
+    // The state is read from the store whenever it tells it (getState, get): what a listener receives is relied on
+    // only by a store that tells its state to its listeners alone
+    let firstWrite = Promise.resolve();
+    if (typeof store.getState === "function") {
+      firstWrite = handleStateChange(store.getState());
+      kept.unsubscribe = store.subscribe(() => {
+        handleStateChange(store.getState());
       });
-    } catch (error) {
-      logError(error);
-      throw error;
+    } else if (typeof store.get === "function") {
+      kept.unsubscribe = store.subscribe(() => {
+        handleStateChange(store.get());
+      });
+    } else {
+      kept.unsubscribe = store.subscribe((...told) => {
+        // A notification without the state tells nothing to write — never read as undefined (that removes the key)
+        if (told.length > 0) {
+          handleStateChange(told[0]);
+        }
+      });
     }
+
+    this._listenToTabs(
+      kept,
+      () => this._currentOf(store),
+      (incoming) => this._apply(store, incoming),
+    );
+    await firstWrite;
+    return true;
   }
 
   // ----------------------------------------------------------------------------------------------
 
   /**
-   * Hydrates a React store from persistent storage.
-   * Supports both Redux (dispatch) and Zustand (setState) update patterns.
-   * @async
-   * @param {Object} store React state store instance to hydrate
-   * @param {string} key Storage key to load from
-   * @returns {Promise<boolean>} Resolves to true on success, undefined if no data found
-   * @throws {Error} Throws if store is invalid or update fails
-   * @example
-   * // Hydrate Redux store
-   * await reactAdapter.getFromStorage(reduxStore, 'user-state');
-   *
-   * // Hydrate Zustand store
-   * await reactAdapter.getFromStorage(zustandStore, 'app-settings');
+   * Loads persisted state into the store — dispatched to Redux (SET_STATE_FROM_STORAGE), set in the others.
+   * @param {any} store - A Redux, Zustand or compatible store.
+   * @param {string} key - Storage key.
+   * @param {import("./StoreAdapter.js").GetFromStorageOptions} [options]
+   * @returns {Promise<true|undefined>} true when a state was loaded; undefined when there was none.
+   * @throws {Error} If the store is not supported, or cannot be set (no dispatch nor setState).
    */
-  async getFromStorage(store, key) {
-    try {
-      logInfo("ReactAdapter - getFromStorage - key:", key);
-      this._checkStore(store);
-      const storage = await this.adapter.get(key);
-      if (!storage) {
-        return;
-      }
-
-      // Handle different React state management libraries
-      if (typeof store.dispatch === "function") {
-        // For Redux, dispatch an action to update state
-        store.dispatch({
-          type: "SET_STATE_FROM_STORAGE",
-          payload: storage,
-        });
-      } else if (typeof store.setState === "function") {
-        // For Zustand or custom React hook store
-        store.setState(assign({}, storage));
-      } else {
-        throw new Error(
-          "Cannot update store: setState or dispatch method not found",
-        );
-      }
-
-      return true;
-    } catch (error) {
-      logError(error);
-      throw error;
+  async getFromStorage(store, key, options = {}) {
+    this._checkStore(store);
+    const storage = await this.adapter.get(key, { onError: options.onError });
+    if (storage === null) {
+      return;
     }
+    // Read from storage just now: a value of its own, shared with nothing
+    if (typeof store.dispatch === "function") {
+      store.dispatch({ type: "SET_STATE_FROM_STORAGE", payload: storage });
+    } else if (typeof store.setState === "function") {
+      this._setState(store, storage);
+    } else {
+      logError("Cannot update store: setState or dispatch method not found");
+      throw new Error("Cannot update store: setState or dispatch method not found");
+    }
+    return true;
   }
 
   // ----------------------------------------------------------------------------------------------
 
   /**
-   * Validates that a store has the required interface methods.
+   * Validates that a store can be kept: it has subscribe, and a way to be read or set that this adapter uses
+   * (getState, setState, get, set or update).
    * @private
-   * @param {Object} store Store instance to validate
-   * @throws {Error} Throws if store is invalid or missing required methods
+   * @param {any} store
+   * @throws {Error} If it cannot be kept.
    */
   _checkStore(store) {
     if (!store) {
       logError("Store provided is not defined");
       throw new Error("Store provided is not defined");
     }
-
-    // Check if it's a Redux store
-    if (
-      typeof store.getState === "function" &&
-      typeof store.dispatch === "function" &&
-      typeof store.subscribe === "function"
-    ) {
-      // Valid Redux store, no further checks needed
-      return;
-    }
-
-    // Check if it's a Zustand store
-    if (
-      typeof store.getState === "function" &&
-      typeof store.setState === "function" &&
-      typeof store.subscribe === "function"
-    ) {
-      // Valid Zustand store, no further checks needed
-      return;
-    }
-
-    // Check if it's a Jotai atom
-    if (
-      Array.isArray(store) &&
-      store.length === 2 &&
-      typeof store[0] === "function" &&
-      typeof store[1] === "function"
-    ) {
-      // Valid Jotai atom pair (getter/setter), no further checks needed
-      return;
-    }
-
-    // Check for custom store with minimum required methods
-    const hasGetState =
-      typeof store.getState === "function" ||
-      typeof store._getState === "function";
-    const hasSetState =
-      typeof store.setState === "function" ||
-      typeof store._setState === "function";
-    const hasSubscribe = typeof store.subscribe === "function";
-
-    if (!hasSubscribe) {
+    if (typeof store.subscribe !== "function") {
       logError("Store must have a subscribe method");
       throw new Error("Store must have a subscribe method");
     }
-
-    if (!hasGetState && !hasSetState) {
-      logError(
-        "Store must have either getState/setState or _getState/_setState methods",
-      );
-      throw new Error(
-        "Store must have either getState/setState or _getState/_setState methods",
-      );
+    if (!STATE_METHODS.some((name) => typeof store[name] === "function")) {
+      logError(`Store must have one of: ${STATE_METHODS.join(", ")}`);
+      throw new Error(`Store must have one of: ${STATE_METHODS.join(", ")}`);
     }
   }
 }

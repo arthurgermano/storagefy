@@ -23,26 +23,26 @@ import Layout from "../../layouts/Layout.astro";
       <pre
         class="strf-code-block">
         <code>
-import IndexedDBAdapter from "storagefy";
+import &#123; IndexedDBAdapter &#125; from "storagefy";
 
 const adapter = new IndexedDBAdapter(&#123;
   dbName: "my-app",               // required - database name
   storeName: "my-store",          // optional - defaults to `$&#123;dbName&#125;_store`
   encrypt: true,                  // optional, default false
   version: 1,                     // optional, default 1
-  expireCheckInterval: 2000,      // optional, default 1000ms
+  expireCheckInterval: 2000,      // optional, default 1000ms - 0 turns the timer off
   description: "App database",    // optional
-  channelName: "idb-channel"      // optional - used for sync between tabs
-  enableSyncTabs: false,          // optional, default false - Whether to enable sync 
-                                  // automatically on change key value
+  password: "my-app-secret",      // optional - the encryption keys are derived from it (with encrypt)
+  keyDerivation: "hkdf",          // optional, default "hkdf" - "pbkdf2" only for a password the person types
+  channelName: "idb-channel",    // optional - the channel the tabs of the app talk on
+  enableSyncTabs: true,           // optional, default false - tell the other tabs about every write and delete
 &#125;);
         </code>
       </pre>
       <p>
-        The <code>channelName</code> enables automatic synchronization of data across
-        open tabs using the <code>CrossTabChannel</code> communication system. This
-        is particularly useful for applications where you want to maintain state
-        consistency across multiple tabs.
+        Sync between tabs needs three settings: <code>channelName</code> and <code>enableSyncTabs</code> here, and
+        <code>syncTabs: true</code> on each store that should follow the other tabs (<code>setInStorage</code>). With
+        only <code>channelName</code>, nothing is told to the other tabs.
       </p>
     </section>
 
@@ -76,10 +76,13 @@ const adapter = new IndexedDBAdapter(&#123;
       <div class="strf-concept">
         <h3>Encryption</h3>
         <p>
-          When the <code>encrypt: true</code> option is set, all values are encrypted
-          before storage and decrypted when retrieved. Keys are also obfuscated to
-          enhance security, providing an additional layer of protection for sensitive
-          data.
+          With <code>encrypt: true</code> every value is encrypted (AES-GCM, a new random IV on every write) and the
+          key names are obfuscated. It makes the values <strong>hard to read in the browser's tools</strong>; it does
+          not keep a secret — everything needed to decrypt ships with the app (with <code>password</code>, reading also
+          needs the app's secret, which is inside its JavaScript). <strong>Never store tokens or passwords.</strong>
+          The keys are derived from the password with <code>keyDerivation</code>: <code>"hkdf"</code> (default, fast)
+          or <code>"pbkdf2"</code> (slow on purpose — only for a password the person types). Each value is read the way
+          it was written, values written by 1.2.x included.
         </p>
       </div>
 
@@ -96,9 +99,9 @@ const adapter = new IndexedDBAdapter(&#123;
       <div class="strf-concept">
         <h3>Cross-Tab Communication</h3>
         <p>
-          When a <code>channelName</code> is provided, changes to data are broadcast
-          across browser tabs. This enables real-time synchronization of state across
-          multiple open instances of your application.
+          With <code>channelName</code> and <code>enableSyncTabs: true</code>, every write and delete is told to the
+          other tabs (<code>BroadcastChannel</code>). A store follows them with <code>syncTabs: true</code>; your code
+          can listen with <code>onDataChanged</code>, which returns a function that stops listening.
         </p>
       </div>
 
@@ -169,8 +172,8 @@ const adapter = new IndexedDBAdapter(&#123;
           <code>await adapter.get(key)</code>
         </h3>
         <p>
-          Retrieves a value. Returns <code>null</code> if not found or expired. Handles
-          decryption automatically if encryption is enabled.
+          Retrieves a value. Returns <code>null</code> if not found, expired or unreadable — pass <code>&#123; onError &#125;</code> to be told a stored value could not be read (another password, changed by hand). Handles
+          decryption automatically.
         </p>
         <pre
           class="strf-code-block">
@@ -186,7 +189,7 @@ const value = await adapter.get("userId"); // "user123"
           <code>await adapter.set(key, value, expire?)</code>
         </h3>
         <p>
-          Stores a value. Optional <code>expire</code> is in milliseconds from now.
+          Stores a value and answers <code>true</code> (saved), <code>false</code> (failed — e.g. storage full) or <code>null</code> (removed: the value is null, or <code>expire</code> is 0 or less). Optional <code>expire</code> is in milliseconds from now. Writes of a key land in the order they were made.
           Handles encryption automatically if enabled and broadcasts changes to other
           tabs if using a channel.
         </p>
@@ -260,8 +263,8 @@ const userData = await adapter.list("user.");
           <code>await adapter.reset()</code>
         </h3>
         <p>
-          Removes only data keys related to the namespace, not metadata. Useful
-          for clearing user data while preserving system configuration.
+          Removes every data key of the namespace and their expirations, not the metadata — after the writes
+          asked before it (the writes asked after wait for it).
         </p>
         <pre class="strf-code-block"><code>await adapter.reset();</code></pre>
       </div>
@@ -333,8 +336,8 @@ await adapter.clearExpire();
           <code>await adapter.waitReadiness(timeout?, tries?)</code>
         </h3>
         <p>
-          Waits for the IndexedDB to be ready before proceeding. Useful when
-          executing operations immediately after initialization.
+          Waits for the IndexedDB to be ready before proceeding — and rejects with the reason when it does not open
+          (refused, upgraded by another tab, destroyed). The other methods wait by themselves.
         </p>
         <pre
           class="strf-code-block">
@@ -350,13 +353,15 @@ await adapter.waitReadiness();
           <code>adapter.destroy()</code>
         </h3>
         <p>
-          Cleans up resources, stops the expiration timer, and removes event
-          listeners. Called automatically on page unload.
+          Releases the adapter once the writes already asked are done: the expiration timer, the channel between
+          tabs and the database connection. Call it when you stop using the adapter — it is not used after,
+          and it is not called on page unload (a <code>beforeunload</code> listener can keep the page out of the
+          browser's back/forward cache).
         </p>
         <pre
           class="strf-code-block">
           <code>
-adapter.destroy(); // Clean up before component unmount
+await adapter.destroy(); // Clean up before component unmount
           </code>
         </pre>
       </div>
@@ -382,16 +387,19 @@ adapter.emitDataChange("appState", newState, "tab-123");
           <code>adapter.onDataChanged(callback)</code>
         </h3>
         <p>
-          Registers a callback function to handle data changes from other tabs
-          or contexts.
+          Listens to the changes other tabs tell (needs <code>channelName</code> and <code>enableSyncTabs</code> in
+          the writing tab). The message carries the key and what happened — read the value again with
+          <code>get</code>. Returns a function that stops listening.
         </p>
         <pre
           class="strf-code-block">
           <code>
-adapter.onDataChanged((&#123; key, value, origin &#125;) => &#123;
-  console.log(`Data for $&#123;key&#125; changed in tab $&#123;origin&#125;`);
-  // Update UI or app state accordingly
+const stop = adapter.onDataChanged(async (&#123; key, origin &#125;) => &#123;
+  // origin: "set", "delete" or "reset"
+  const value = await adapter.get(key); // null after a delete
 &#125;);
+
+stop(); // stops listening
           </code>
         </pre>
       </div>
@@ -488,40 +496,30 @@ async function getFavoriteProducts() &#123;
       </div>
 
       <div class="strf-advanced">
-        <h3>IndexedDB with Encryption for Sensitive Data</h3>
-        <p>Secure storage of sensitive user information:</p>
+        <h3>Encrypted preferences, grouped by prefix</h3>
+        <p>
+          Encryption keeps the values out of plain sight in the browser's tools — fine for preferences. It does not
+          keep a secret: never store tokens or passwords here.
+        </p>
         <pre
           class="strf-code-block">
           <code>
-// Create a separate adapter instance for sensitive data
-const secureAdapter = new IndexedDBAdapter(&#123;
-  dbName: "secure_storage",
-  encrypt: true
+const preferences = new IndexedDBAdapter(&#123;
+  dbName: "my-app",
+  encrypt: true,
+  password: "my-app-secret", // a constant of the app: keyDerivation "hkdf" (the default) is the right one
 &#125;);
 
-// Store encrypted credentials
-async function storeCredentials(username, accessToken, refreshToken) &#123;
-  await secureAdapter.set("auth.username", username);
-  await secureAdapter.set("auth.accessToken", accessToken);
-  await secureAdapter.set("auth.refreshToken", refreshToken);
-  await secureAdapter.set("auth.timestamp", Date.now());
-&#125;
+await preferences.set("ui.theme", "dark");
+await preferences.set("ui.language", "pt-BR");
 
-// Get authentication data
-async function getAuthData() &#123;
-  const authData = await secureAdapter.list("auth.");
-  return authData.reduce((obj, item) => &#123;
-    obj[item.key.replace("auth.", "")] = item.value;
-    return obj;
-  &#125;, &#123;&#125;);
-&#125;
+// Every key that starts with "ui."
+const ui = await preferences.list("ui.");
+// [&#123; key: "ui.theme", value: "dark" &#125;, &#123; key: "ui.language", value: "pt-BR" &#125;]
 
-// Clear authentication on logout
-async function logout() &#123;
-  const authKeys = await secureAdapter.list("auth.");
-  for (const item of authKeys) &#123;
-    await secureAdapter.delete(item.key);
-  &#125;
+// Forget them all
+for (const &#123; key &#125; of ui) &#123;
+  await preferences.delete(key);
 &#125;
           </code>
         </pre>
@@ -569,7 +567,7 @@ async function logout() &#123;
             <td>Best Use Cases</td>
             <td>Large datasets, offline apps, complex data structures</td>
             <td>User preferences, app settings</td>
-            <td>Form state, wizards, temporary authentication</td>
+            <td>Form state, wizards, the state of one tab</td>
           </tr>
           <tr>
             <td>Browser Support</td>
@@ -595,19 +593,23 @@ async function logout() &#123;
           calling adapter methods.
         </li>
         <li>
-          Consider calling <code>waitReadiness()</code> after initialization to ensure
-          the database is open before performing operations.
+          Every method waits for the database to open by itself; <code>waitReadiness()</code> is there when you need to
+          know it is open. A write answers <code>true</code> only once its transaction is saved.
         </li>
         <li>
-          Use <code>encrypt: true</code> for sensitive data that should be protected
-          even in the client-side storage.
+          The object store is created with the database, or when its <code>version</code> is raised. The same
+          <code>dbName</code> opened with another <code>storeName</code> at the same version is refused with the reason
+          (writes answer <code>false</code>, reads <code>null</code>, through <code>onError</code>) — mind the defaults:
+          <code>startStoragefy</code> uses <code>"storagefy_db"</code>, the class <code>`$&#123;dbName&#125;_store`</code>.
+          When a tab opens a higher <code>version</code>, the tabs on the older one close it and fail with "upgraded by
+          another tab — reload the page".
+        </li>
+        <li>
+          Use <code>encrypt: true</code> to keep values out of plain sight — it does not protect a secret: never store
+          tokens or passwords.
         </li>
         <li>
           Keys are namespaced under <code>&#123;dbName&#125;__</code> to avoid conflicts.
-        </li>
-        <li>
-          A <code>beforeunload</code> event listener is registered to properly clean
-          up resources.
         </li>
         <li>
           Expirations are automatically checked and cleared at the specified

@@ -47,22 +47,25 @@ import &#123; SvelteAdapter &#125; from "storagefy";
 import &#123; startStoragefy &#125;  from "storagefy";
 const adapter = startStoragefy(&#123;
   dbName: "my-app",
-  adapter: "indexedDB", // or "localStorage" or "sessionStorage"
-  encrypt: true,
-  expireCheckInterval: 2000,
-  channelName: "storagefy-sync", // sync changes across tabs/windows
-  enableSyncTabs: false, // optional, default false
+  adapter: "indexedDB",          // the default; or "localStorage" or "sessionStorage"
+  encrypt: true,                 // makes the values hard to read — not a way to keep a secret
+  password: "my-app-secret",     // the encryption keys are derived from it
+  keyDerivation: "hkdf",         // the default; "pbkdf2" only for a password the person types
+  expireCheckInterval: 2000,     // ms; 0 turns the expiry timer off
+  channelName: "storagefy-sync", // the channel the tabs talk on…
+  enableSyncTabs: true,          // …and this storage tells them about its writes
 &#125;);
         </code>
       </pre>
       <p>
-        If an adapter is already initialized and <code>forceRecreate</code> is not
-        set to <code>true</code>, the same instance is reused.
+        If an adapter is already started, the same instance is returned — unless <code>forceRecreate: true</code>
+        (a new adapter replaces it: the old one is destroyed, and the store adapters kept over it stop keeping their
+        stores — keep them again) or <code>fresh: true</code> (a new adapter is returned and the one started stays).
       </p>
       <p>
-        The <code>channelName</code> option creates a communication channel across
-        browser tabs using <code>BroadcastChannel</code>, allowing real-time
-        sync of updates in React, Vue (Pinia), or Svelte stores.
+        Sync between tabs needs three settings: <code>channelName</code> and <code>enableSyncTabs</code> on the storage
+        adapter, and <code>syncTabs: true</code> on each store that should follow the other tabs (see below). With
+        only <code>channelName</code>, nothing is synced.
       </p>
     </section>
 
@@ -99,8 +102,8 @@ await setInStorage(myStore, "user", &#123;
 // Given state:
 // &#123; name: "Alice", password: "secret", token: "abc123" &#125;
 
-// Persisted as:
-// &#123; name: "Alice", password: undefined, token: undefined &#125;
+// Stored as (the ignored keys are left out):
+// &#123; name: "Alice" &#125;
         </code>
       </pre>
 
@@ -125,12 +128,10 @@ await setInStorage(myStore, "user", &#123;
 //   &#125;
 // &#125;
 
-// Persisted as:
+// Stored as:
 // &#123;
 //   name: "Alice",
 //   credentials: &#123;
-//     password: undefined,
-//     token: undefined,
 //     role: "admin"  // unaffected
 //   &#125;
 // &#125;
@@ -156,12 +157,10 @@ await setInStorage(myStore, "app", &#123;
 //   &#125;
 // &#125;
 
-// Persisted as:
+// Stored as:
 // &#123;
 //   config: &#123;
 //     api: &#123;
-//       secretKey: undefined,
-//       privateToken: undefined,
 //       baseUrl: "https://api.example.com"  // unaffected
 //     &#125;
 //   &#125;
@@ -195,14 +194,14 @@ await setInStorage(myStore, "user", &#123;
         <pre class="strf-code-block">
           <code>
 import &#123; getReactAdapter &#125; from "storagefy";
-// startStoragefy() must be called first
+// Over a new localStorage adapter (or over the one startStoragefy() started, without adapterParams)
 const react = getReactAdapter(&#123;
   adapterParams: &#123; adapter: "localStorage", dbName: "my-react-app" &#125;
 &#125;);
-    
-await getFromStorage(myStore, "user"); // THIS MUST BE CALLED FIRST THAN setInStorage
 
-await setInStorage(myStore, "user", &#123;
+await react.getFromStorage(myStore, "user"); // load what was kept — before setInStorage, which writes the state
+
+await react.setInStorage(myStore, "user", &#123;
   timeout: 3600000,
   ignoreKeys: [
     "tempId",               // flat key
@@ -233,10 +232,10 @@ await setReactStorage(myStore, "settings", &#123;
           <code>
 // startStoragefy() must be called first
 const &#123; setInStorage, getFromStorage &#125; = getPiniaAdapter(&#123;
-  adapterParams: &#123; adapter: "sessionStorage" &#125;
+  adapterParams: &#123; adapter: "sessionStorage", dbName: "my-vue-app" &#125;
 &#125;);
-    
-await getFromStorage(myStore, "user"); // THIS MUST BE CALLED FIRST THAN setInStorage
+
+await getFromStorage(myStore, "user"); // load what was kept — before setInStorage, which writes the state
 
 await setInStorage(myStore, "user", &#123;
   timeout: 3600000,
@@ -263,17 +262,14 @@ await setPiniaStorage(myStore, "user", &#123;
 
       <div class="strf-adapter">
         <h3>Svelte</h3>
-        <p>Integrate Svelte writable or readable stores:</p>
+        <p>Integrate Svelte <code>writable</code> stores:</p>
         <pre class="strf-code-block">
           <code>
-// startStoragefy() must be called first
 const svelte = getSvelteAdapter(&#123;
-  adapterParams: &#123; 
-    adapter: "indexedDB" 
-  &#125;
+  adapterParams: &#123; adapter: "indexedDB", dbName: "my-svelte-app" &#125;
 &#125;);
-    
-await getFromStorage(myStore, "theme"); // THIS MUST BE CALLED FIRST THAN setInStorage
+
+await svelte.getFromStorage(myStore, "theme"); // load what was kept — before setInStorage, which writes the state
 
 await svelte.setInStorage(myStore, "theme", &#123;
   timeout: 86400000,
@@ -302,12 +298,13 @@ await setSvelteStorage(myStore, "theme", &#123;
       <p>All <code>set*</code> functions accept the same parameters:</p>
       <ul>
         <li><code>store</code>: The store instance you want to persist</li>
-        <li><code>id</code>: A string key under which to store the data</li>
+        <li><code>key</code>: A string key under which to store the data</li>
         <li>
           <code>options</code> (optional):
           <ul>
             <li>
-              <code>timeout</code>: Expiration duration in milliseconds for the stored data
+              <code>timeout</code>: <strong>expiration</strong> of the stored state, in milliseconds after each
+              write — not a time limit of the operation: after it, the stored state is gone
             </li>
             <li>
               <code>ignoreKeys</code>: Array of keys to exclude from persistence.
@@ -315,8 +312,13 @@ await setSvelteStorage(myStore, "theme", &#123;
               for nested keys (<code>"auth.password"</code>, <code>"auth.api.token"</code>).
             </li>
             <li>
-              <code>syncTabs</code>: If <code>true</code>, enables cross-tab
-              syncing using the <code>channelName</code>
+              <code>syncTabs</code>: If <code>true</code>, this store applies the changes of the other tabs — the
+              storage adapter needs <code>channelName</code> and <code>enableSyncTabs</code>
+            </li>
+            <li>
+              <code>onError</code>: called with an <code>Error</code> when the state could not be saved (storage
+              full…) or a change from another tab could not be read. <code>getFromStorage(store, key, &#123; onError
+              &#125;)</code> also tells a stored state that cannot be read
             </li>
           </ul>
         </li>

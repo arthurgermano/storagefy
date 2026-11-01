@@ -19,3 +19,10 @@ pnpm-debug.log*
 
 # jetbrains setting folder
 .idea/
+
+# test coverage report (npm run test:coverage)
+coverage/
+
+# Playwright (npm run test:browser)
+test-results/
+playwright-report/

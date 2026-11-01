@@ -1,16 +1,16 @@
 # 📦 storagefy
 
-**Framework-agnostic, pluggable storage adapter library** for syncing your app state across localStorage, sessionStorage, and IndexedDB—with first-class support for **Pinia**, **React**, and **Svelte** stores.
+Keep the state of your **Pinia**, **Redux**, **Zustand**, **Jotai** or **Svelte** stores in **IndexedDB**,
+**localStorage** or **sessionStorage** — with expiration, optional encryption and sync between the tabs of your app.
 
----
+- 🔌 One storage adapter per kind of storage, the same interface for all three
+- 🧠 Expiration per key, and per store
+- 🔐 Optional encryption (AES-GCM) — makes the stored values hard to read in the browser (see [Encryption](#-encryption))
+- 🪟 Optional sync between tabs (`BroadcastChannel`)
+- 🧾 Writes land in the order they were made; a burst of changes is one write; failures are reported (`onError`)
+- 🟦 Typed (TypeScript declarations generated from the sources)
 
-## 🚀 Features
-
-- 🔌 Plug-and-play storage: IndexedDB, localStorage, or sessionStorage
-- 🧠 Built-in expiration + encryption support
-- 🪄 Works out-of-the-box with **Pinia**, **Redux/Zustand/Jotai/custom React**, and **Svelte stores**
-- 🪟 Optional multi-tab sync via `BroadcastChannel`
-- 🔁 Easily switch or upgrade your storage backend without touching app logic
+Documentation and live demos: **https://arthurgermano.github.io/storagefy/** · Changes: [CHANGELOG.md](CHANGELOG.md)
 
 ---
 
@@ -20,139 +20,222 @@
 npm install storagefy
 ```
 
-## 🛠️ Quick Start
-
-### 1. Initialize a storage adapter
-Create your storage instance by configuring the adapter type (IndexedDB, localStorage, or sessionStorage), database name, and optional features like encryption and multi-tab sync.
+## 🛠️ Quick start (Pinia + IndexedDB)
 
 ```ts
-import { startStoragefy } from 'storagefy';
+import { IndexedDBAdapter, PiniaAdapter } from "storagefy";
 
-const adapter = startStoragefy({
-  dbName: 'my-app',
-  adapter: 'indexedDB', // or 'localStorage', 'sessionStorage'
-  encrypt: true,
-  channelName: 'my-app-channel',
+const storage = new IndexedDBAdapter({ dbName: "my-app" });
+const pinia = new PiniaAdapter(storage);
+
+const cart = useCartStore();
+await pinia.getFromStorage(cart, "cart"); // load what was kept (nothing the first time)
+await pinia.setInStorage(cart, "cart", {   // keep every change from now on
+  ignoreKeys: ["draft"],                   // memory only
+  onError: (error) => console.error(error) // the state could not be saved (storage full…)
 });
 ```
 
-### 2. Use with a framework adapter
-Connect to your preferred framework (Pinia/Vue, React, or Svelte) using the appropriate adapter methods for getting and setting storage values.
+React (Redux, Zustand, or any store with `subscribe` and `getState`/`setState`) and Svelte (`writable`) work the
+same way with `ReactAdapter` and `SvelteAdapter`.
+
+---
+
+## 🧱 Storage adapters
+
+`IndexedDBAdapter`, `LocalStorageAdapter`, `SessionStorageAdapter` — or `startStoragefy({ adapter })`, which creates
+one and keeps it for the other helpers.
+
+### Options
+
+| Option | Default | What it does |
+|---|---|---|
+| `dbName` | — | Namespace of the keys (the database name for IndexedDB) |
+| `storeName` | `${dbName}_store` | IndexedDB only: the object store |
+| `version` | `1` | Version of the stored schema |
+| `encrypt` | `false` | Encrypt the values and obfuscate the key names (see [Encryption](#-encryption)) |
+| `password` | — | The app's secret the encryption keys are derived from (with `encrypt`) |
+| `keyDerivation` | `"hkdf"` | How the keys are derived from the password: `"hkdf"` or `"pbkdf2"` (see [Encryption](#-encryption)) |
+| `channelName` | — | Name of the `BroadcastChannel` the tabs of your app talk on |
+| `enableSyncTabs` | `false` | Tell the other tabs about every write and delete (needs `channelName`) |
+| `expireCheckInterval` | `1000` | How often (ms) expired keys are removed; `0` turns the timer off (expired keys are still never read) |
+| `description` | `""` | Kept with the metadata |
+
+`startStoragefy` also takes `adapter` (`"indexedDB"` — the default —, `"localStorage"`, `"sessionStorage"`),
+`fresh: true` (a new adapter, the one kept stays) and `forceRecreate: true` (a new adapter that replaces the one kept —
+the old one is destroyed, and the store adapters kept over it stop keeping their stores: keep them again).
+
+### Methods
+
+| Method | Answers |
+|---|---|
+| `get(key, { onError }?)` | The value, or `null` when absent, expired or unreadable — `onError` tells the last case apart |
+| `set(key, value, expire?)` | `true` saved, `false` failed, `null` removed (`value` null/undefined, or `expire` ≤ 0). `expire`: ms from now |
+| `delete(key)` | Removes the key and its expiration |
+| `has(key)` | Whether the key is stored and not expired — whether `get` would find a value |
+| `list(prefix?)` | `[{ key, value }]` of the keys that start with `prefix` (every key without it) |
+| `getAll(table?)` | `list(`${table}__`)` — every key without a table |
+| `reset()` / `clear()` | Remove every key of the namespace and their expirations (`clear` also the metadata) — after the writes asked before them; the writes asked after wait for them |
+| `setExpire(key, timestamp)` / `getExpire(key)` / `deleteExpire(key)` / `clearExpire()` | Expirations by hand |
+| `onDataChanged(listener)` | Listens to the other tabs' changes; returns a function that stops |
+| `destroy()` | Releases the adapter once the writes asked are done: the expiry timer, the channel and the IndexedDB connection. Call it when you stop using the adapter — it is not used after |
+| `waitReadiness()` | IndexedDB only: resolves once the database is open (the other methods wait by themselves); rejects with the reason when it does not open |
+
+Writes of a key are applied **in the order they were made** — even when encryption takes longer for one of them —
+and a read (`get`, `has`) waits for the writes of its key asked before it. An expired key is removed only if it is
+still expired when its turn comes: a write made meanwhile is never undone by an older expiration. With IndexedDB, a
+write answers `true` only once its transaction is saved, and the value and its expiration are written in one
+transaction.
+
+#### IndexedDB: database, object store and version
+
+The object store is created when the database is created or its `version` is raised. A database opened again with
+another `storeName` at the same version has no such store: the adapter refuses it with the reason (every write answers
+`false`, every read `null`, both through `onError`). Mind the defaults — `startStoragefy` uses `"storagefy_db"`, the
+class `${dbName}_store`. When a tab opens a higher `version`, the tabs holding the older one close it and fail with
+"upgraded by another tab — reload the page".
+
+---
+
+## 🪄 Store adapters
+
+`PiniaAdapter`, `ReactAdapter`, `SvelteAdapter` — each created over a storage adapter.
+
+A store may hold any JSON value: an object, an array, a number, a string, a boolean (a Pinia store's state is always
+an object). What it holds is written, and loaded back as it was. A state set to **`null` or `undefined` removes the
+stored key** — a store emptied on sign-out is not loaded back after a reload.
+
+The state is always read from the store: `getState()` (Redux, Zustand) or `get()`; a React store with neither is read
+from what it passes its listeners — a notification that passes nothing writes nothing (it is never taken for
+`undefined`).
+
+### `getFromStorage(store, key, { onError }?)`
+
+Loads what was kept under `key` into the store. Answers `true` when a state was loaded, `undefined` when there was
+none. A state that is there but cannot be read (another password, changed by hand — or, for Pinia, not an object) is
+reported to `onError`; the store keeps its state.
+
+### `setInStorage(store, key, options?)`
+
+Writes the store's state now and on every change after. A burst of changes is written once after the write in
+progress — the last state always wins.
+
+| Option | What it does |
+|---|---|
+| `ignoreKeys` | State left out of storage. Dot notation reaches nested keys: `["draft", "user.password"]` |
+| `timeout` | ⚠️ **Expiration** of the stored state, in ms after each write — not a time limit: after it, the stored state is gone |
+| `syncTabs` | Apply the changes of the other tabs to this store (see [Sync between tabs](#-sync-between-tabs)) |
+| `onError` | Called with an `Error` when the state could not be saved, or a change from another tab could not be read or applied |
+
+### `destroy(key)` / `destroyAll()`
+
+Stops keeping the store of `key` (`destroyAll`: every store of the adapter): no more writes, no more changes from the
+other tabs. What is stored stays, and the storage adapter goes on.
+
+### Helpers
+
+- `getPiniaAdapter(options?)`, `getReactAdapter(options?)`, `getSvelteAdapter(options?)` — a store adapter over
+  `options.adapter`, over a new storage adapter (`options.adapterParams`), or over the one `startStoragefy` created.
+  It is kept and returned again; `fresh: true` returns a new one, `forceRecreate: true` replaces it (the one replaced
+  stops keeping its stores — keep them again).
+- `setPiniaStorage(store, key, options?)`, `setReactStorage(…)`, `setSvelteStorage(…)` — `getFromStorage` then
+  `setInStorage`, with the store adapter kept.
+
+---
+
+## 🔄 Sync between tabs
+
+Three settings, each in its place:
 
 ```ts
-import { getPiniaAdapter } from 'storagefy';
-
-const { setInStorage, getFromStorage } = getPiniaAdapter();
-
-await getFromStorage(useUserStore(), 'user');
-await setInStorage(useUserStore(), 'user', {
-  ignoreKeys: ['draft'],
-  // Every write that fails (storage full, private mode, encryption failure) — the store keeps working,
-  // but its state was not saved. Without it, a failed write is only logged in debug mode.
-  onError: (error) => reportToMyApp(error),
+const storage = new IndexedDBAdapter({
+  dbName: "my-app",
+  channelName: "my-app-tabs", // 1. the channel the tabs talk on
+  enableSyncTabs: true,        // 2. this storage tells the other tabs about its writes
 });
+await pinia.setInStorage(cart, "cart", { syncTabs: true }); // 3. this store applies the other tabs' changes
 ```
 
-## 🧱 Storage Adapters
+Without all three, nothing is synced — and nothing warns you. A store chooses with `syncTabs` whether it follows the
+other tabs; the stores that do not are still written. Several store adapters may share one storage adapter.
 
-### `startStoragefy(config)`
+Good to know:
 
-Initializes the storage adapter. If called multiple times, reuses the same adapter unless `fresh: true` or `forceRecreate: true` is passed.
+- A key **removed** in another tab (`delete`, `reset`) is not removed from this tab's store — what is in memory stays.
+- With localStorage and sessionStorage the stored value is sent with the message — sessionStorage belongs to one tab,
+  and a write to localStorage may reach the other tabs after the message does (Firefox). With sessionStorage the change
+  is applied to the store, not to this tab's sessionStorage. IndexedDB is read again: a write is told once its
+  transaction is saved.
+- A change whose state the store already holds (`ignoreKeys` left out) is not applied again.
+- The changes are applied in the order they came — reading or decrypting one never lets an older change land last.
+  Two objects are merged (what `ignoreKeys` left out stays in memory); an array or any other value replaces the state.
+- A store follows only the changes of its own `dbName`: apps that share a channel name do not mix their states.
+- Nothing is added to your state: other subscribers of the store see the other tab's state as it is.
 
-#### Parameters:
+---
 
-- **adapter**: `'indexedDB' | 'localStorage' | 'sessionStorage'`  
-  *(default: `'indexedDB'`)*
+## 🔐 Encryption
 
-- **dbName**: `string`  
-  Name of the database (only used for IndexedDB)
+`encrypt: true` encrypts every value with AES-GCM (256-bit keys, a new random IV on every write) and obfuscates the
+key names.
 
-- **storeName**: `string`  
-  Store name (default: `'storagefy_db'`)
+**What it is for:** it makes the stored values hard to read in the browser's tools. **What it is not:** a way to keep
+a secret. Everything needed to decrypt ships with your app:
 
-- **encrypt**: `boolean`  
-  Enable encryption (default: `false`)
-
-- **password**: `string`  
-  The app's secret the encryption key is derived from (only with `encrypt: true`). See *Encryption* below
-
-- **channelName**: `string`  
-  Name for `BroadcastChannel` to sync across tabs
-
-- **expireCheckInterval**: `number`  
-  Interval (in ms) to check for expired values
-
-- **description**: `string`  
-  Description for IndexedDB metadata
-
-- **fresh**: `boolean`  
-  Always return a new instance (default: `false`)
-
-- **forceRecreate**: `boolean`  
-  Force recreate the singleton instance (default: `false`)
-
-#### Example:
-
-```ts
-import { startStoragefy } from 'storagefy';
-
-const adapter = startStoragefy({
-  adapter: 'localStorage',
-  encrypt: true,
-});
-```
-
-### 🔄 Multi-Tab Sync (Optional)
-Enable by configuring `channelName` during initialization. Automatically synchronizes state updates between:
-
-- Browser tabs  
-- Windows  
-- iFrames  
-
-```ts
-const adapter = startStoragefy({
-  channelName: 'my-app-sync',
-});
-```
-
-Uses the BroadcastChannel API for real-time communication.
-
-### 🔐 Encryption (Optional)
-Enable by setting `encrypt: true`. Values are encrypted with AES-GCM (Web Crypto) and key names are obfuscated.
-
-**What it protects — and what it does not.** Everything needed to decrypt lives in the browser:
-
-- **Without `password`**, the AES key is derived from the storage key's own name. Anyone who knows this library can
-  read the values (e.g. from DevTools). It hides data from casual inspection only.
-- **With `password`**, the AES key is derived (PBKDF2) from your app's secret, with the storage key as salt. Reading
-  the values then also needs that secret, which ships inside your app's JavaScript — much harder to read, never
+- Without `password`, a key is derived from the storage key's own name — anyone who knows this library can read the
+  values.
+- With `password`, reading also needs your app's secret — which is inside your app's JavaScript. Harder, never
   impossible.
 
-**Never store tokens, passwords or anything secret with Storagefy** — encrypted or not. Keep it for data that is fine
-to sit on the device (preferences, cached state, "signed in until").
+**Never store a token, a password or personal data you must protect with Storagefy** — encrypted or not. Keep it for
+what is fine to sit on the device: preferences, a cart, a draft, "signed in until".
 
-**Cost:** PBKDF2 is slow on purpose (100,000 rounds), so each adapter derives the key of a storage key once and keeps
-it in memory — a store that writes on every change does not pay it again.
+### `keyDerivation`
 
-Values written without `password` stay readable by adapters without `password` (the format is unchanged across
-versions). Turning `password` on for existing data makes it unreadable: the adapter answers `null` and the app starts
-from its initial state.
+How the encryption keys are derived from the password:
+
+| | Cost | When |
+|---|---|---|
+| `"hkdf"` (default) | well under 1 ms per key | The password is a constant of your app. Slowing it down protects nothing: anyone who reads your app has it |
+| `"pbkdf2"` | 100,000 rounds — tens of ms per key, more on a slow phone | The password is **typed by the person** (a PIN, a passphrase): guessing it must be slow |
+
+Each key is derived once per adapter and kept in memory. Every stored value records how its key was derived and is
+read that way — changing the option never makes stored values unreadable. Values written by 1.2.x (PBKDF2) are still
+read, and written again in the 1.3.0 format on their next write.
+
+Turning `password` on (or changing it) for existing values makes them unreadable: they read as `null`, `onError`
+says why, and the store starts from its initial state.
+
+---
+
+## ⚠️ Errors and debugging
+
+- Reads answer `null` and writes `false` instead of throwing — pass `onError` to `get` / `getFromStorage` /
+  `setInStorage` to be told.
+- `globalThis.storagefyDebug = true` (and `globalThis.storagefyDebugLevel = 0…3`) logs what Storagefy does to the
+  console. **Debug logs show the values in plain text**, encrypted or not — never turn it on in production.
+
+## 🟦 TypeScript
+
+The package ships its declarations (`dist/types`). The option types are exported:
 
 ```ts
-startStoragefy({
-  encrypt: true,
-  password: 'my-app-secret',
-});
+import type {
+  StorageAdapterOptions, // the storage adapters' options
+  SetInStorageOptions,   // setInStorage (and set*Storage)
+  GetFromStorageOptions, // getFromStorage
+  ReadOptions,           // get
+  DataChange,            // what onDataChanged hears
+  FrameworkAdapterOptions, // get*Adapter
+} from "storagefy";
 ```
 
-### 🧪 Example Use Cases
-Common implementation scenarios:
+## ⬆️ Upgrading to 1.3.0
 
-- Persistent shopping carts  
-- Authentication token storage  
-- Cross-tab UI preference synchronization  
-- Offline application state management  
-- User session preservation  
+Read [CHANGELOG.md](CHANGELOG.md): the format of encrypted values changed (older versions cannot read values written
+by 1.3.0), `list(prefix)` now filters, `ReactAdapter.setInStorage` resolves after the first write, `destroy()` is
+async and releases everything, and `forceRecreate` ends what it replaces.
 
-### 📜 License
-MIT License
+## 📜 License
+
+MIT
