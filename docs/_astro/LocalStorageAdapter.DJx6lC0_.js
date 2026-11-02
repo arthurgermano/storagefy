@@ -1,0 +1,1 @@
+import{t as e}from"./WebStorageAdapter.D6vGtTJ9.js";var t=class extends e{constructor(e){super(e,{storageName:`localStorage`,label:`LocalStorage`,shared:!0})}};export{t as default};

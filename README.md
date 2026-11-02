@@ -223,7 +223,10 @@ says why, and the store starts from its initial state.
 ## ⚠️ Errors and debugging
 
 - Reads answer `null` and writes `false` instead of throwing — pass `onError` to `get` / `getFromStorage` /
-  `setInStorage` to be told.
+  `setInStorage` to be told. A storage that fails (full, encryption unavailable…) never breaks the app.
+- A mistake of the app throws instead, so you see it while developing: a store of another library, a storage adapter
+  of your own whose `set` throws, a state that cannot be copied — `setInStorage` rejects when its first write threw
+  (Pinia, Svelte and React alike).
 - `globalThis.storagefyDebug = true` (and `globalThis.storagefyDebugLevel = 0…3`) logs what Storagefy does to the
   console. **Debug logs show the values in plain text**, encrypted or not — never turn it on in production.
 

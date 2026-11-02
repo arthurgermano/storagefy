@@ -70,8 +70,7 @@ class ReactAdapter extends StoreAdapter {
    */
   _subscribe(store, kept) {
     if (typeof store.getState === "function") {
-      const firstWrite = kept.firstWrite(store.getState()).catch(() => {
-      });
+      const firstWrite = kept.firstWrite(store.getState());
       return { unsubscribe: store.subscribe(() => kept.changed(store.getState())), firstWrite };
     }
     if (typeof store.get === "function") {

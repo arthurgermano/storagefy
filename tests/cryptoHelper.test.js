@@ -1,12 +1,7 @@
 import { base64To } from "misc-helpers";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { encryptData } from "./__fixtures__/legacyFormat.js";
-import {
-  deriveKey,
-  decryptData,
-  generateSalt,
-  generateKeyMaterial,
-} from "../src/helpers/cryptoHelper.js";
+import { deriveKey, decryptData } from "../src/helpers/cryptoHelper.js";
 
 // ------------------------------------------------------------------------------------------------
 
@@ -137,7 +132,8 @@ describe("CRYPTO HELPER", () => {
 
   // ------------------------------------------------------------------------------------------------
 
-  describe("encryptData / decryptData", () => {
+  // Values in the format of 1.2.x (written by the fixture, as that version did): still read
+  describe("decryptData — values of 1.2.x", () => {
     let key;
 
     // --------------------------------------------------------------------------------------------
@@ -223,12 +219,6 @@ describe("CRYPTO HELPER", () => {
 
     // --------------------------------------------------------------------------------------------
 
-    it("should throw if encryptData receives an invalid key", async () => {
-      await expect(encryptData(null, TEST_OBJECT)).rejects.toThrow();
-    });
-
-    // --------------------------------------------------------------------------------------------
-
     it("should throw if decrypted data is not valid JSON", async () => {
       const key = await deriveKey(TEST_PASSWORD);
       const encoded = new TextEncoder().encode("this is not json");
@@ -248,27 +238,6 @@ describe("CRYPTO HELPER", () => {
       malformed.data = malformed.data.slice(0, -2);
 
       await expect(decryptData(key, malformed)).rejects.toThrow();
-    });
-
-    // --------------------------------------------------------------------------------------------
-
-    it("should throw if encrypting undefined", async () => {
-      const key = await deriveKey(TEST_PASSWORD);
-      await expect(encryptData(key, undefined)).rejects.toThrow();
-    });
-
-    // --------------------------------------------------------------------------------------------
-
-    it("should throw if encrypting a function", async () => {
-      const key = await deriveKey(TEST_PASSWORD);
-      await expect(encryptData(key, () => {})).rejects.toThrow();
-    });
-
-    // --------------------------------------------------------------------------------------------
-
-    it("should throw if encrypting a symbol", async () => {
-      const key = await deriveKey(TEST_PASSWORD);
-      await expect(encryptData(key, Symbol("fail"))).rejects.toThrow();
     });
   });
 

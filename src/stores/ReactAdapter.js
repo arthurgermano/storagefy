@@ -15,8 +15,8 @@ const STATE_METHODS = ["getState", "setState", "get", "set", "update"];
  *
  * The state is read with getState, or get; a store with neither is read from what it passes its listeners — a
  * notification that passes nothing writes nothing. A store that tells its state (getState), as Redux and Zustand do,
- * is written at once by setInStorage (unless storage already holds it; a failed write is told through onError);
- * the others on their first change. A null or undefined state removes the stored key.
+ * is written at once by setInStorage (unless storage already holds it), and setInStorage throws when that write
+ * threw; the others are written on their first change. A null or undefined state removes the stored key.
  * @class ReactAdapter
  * @extends StoreAdapter
  * @example
@@ -105,8 +105,7 @@ class ReactAdapter extends StoreAdapter {
    */
   _subscribe(store, kept) {
     if (typeof store.getState === "function") {
-      // A failed first write was told through onError
-      const firstWrite = kept.firstWrite(store.getState()).catch(() => {});
+      const firstWrite = kept.firstWrite(store.getState());
       return { unsubscribe: store.subscribe(() => kept.changed(store.getState())), firstWrite };
     }
     if (typeof store.get === "function") {

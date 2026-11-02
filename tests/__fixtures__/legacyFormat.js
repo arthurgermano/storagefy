@@ -21,12 +21,8 @@ function bytesToBinary(bytes) {
  * @param {any} dataObj - The data to encrypt.
  * @param {boolean} [raw=false] - If true, the raw bytes (not base64).
  * @returns {Promise<{ iv: string|Uint8Array, data: string|Uint8Array }>}
- * @throws {Error} If the value cannot be encrypted (undefined, a function, a symbol) or encryption fails.
  */
 export async function encryptData(key, dataObj, raw = false) {
-  if (dataObj === undefined || typeof dataObj === "function" || typeof dataObj === "symbol") {
-    throw new Error("Invalid data type for encryption");
-  }
   const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
   const encoded = new TextEncoder().encode(JSON.stringify(dataObj));
   const encrypted = new Uint8Array(await globalThis.crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoded));

@@ -362,7 +362,9 @@ await setInStorage(myStore, "user", &#123;
             <p class="strf-option-desc">
               The storage is full, the encryption failed, or a change from another tab could not be read — the store
               keeps working. <code>getFromStorage(store, key, &#123; onError &#125;)</code> also tells a stored state
-              that is there but cannot be read (another password, changed by hand).
+              that is there but cannot be read (another password, changed by hand). A mistake of the app throws
+              instead, so it shows while developing: <code>setInStorage</code> rejects when its first write threw (a
+              storage adapter of your own whose <code>set</code> throws, a state that cannot be copied).
             </p>
             <pre
               class="strf-code-block">

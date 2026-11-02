@@ -23,7 +23,9 @@ class StoreAdapter {
    * @param {string} key - Storage key.
    * @param {SetInStorageOptions} [options]
    * @returns {Promise<boolean>} true once the store is subscribed to and its state written (or found stored).
-   * @throws {Error} If the store is not one of the adapter's library, or (Pinia, Svelte) the first write threw.
+   * @throws {Error} If the store is not one of the adapter's library, or the first write threw — a mistake of the app
+   *   (a storage adapter of its own that throws, a state that cannot be copied). A write the storage did not save
+   *   (full, encryption unavailable…) throws nothing: it is told through onError, like every write after.
    * @example
    * await piniaAdapter.setInStorage(useUserStore(), "user-data", { ignoreKeys: ["password", "token"] });
    */

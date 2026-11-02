@@ -54,6 +54,9 @@
   what 1.3.0 wrote** (a value without revision is older than any write). A message of a 1.3.0 tab (no revision) is
   applied as then: when its state differs.
 - An invalid `password` or `keyDerivation` is refused before the channel between tabs opens: none is left open.
+- `ReactAdapter.setInStorage` rejects when its first write threw, as Pinia and Svelte do — a mistake of the app (a
+  storage adapter of its own that throws, a state that cannot be copied). A write the storage did not save (full,
+  encryption unavailable…) throws nothing, as before: it is told through `onError`.
 
 ### Internal
 

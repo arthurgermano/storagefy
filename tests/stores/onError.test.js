@@ -90,6 +90,25 @@ describe.each(Object.keys(stores))("%s — onError", (name) => {
     expect(onError.mock.calls[0][0].cause).toBe(quota);
   });
 
+  it("the first write not saved (the storage answers false) is told, and setInStorage resolves", async () => {
+    const onError = vi.fn();
+    vi.spyOn(storage, "set").mockResolvedValue(false);
+
+    await expect(stores[name].persist(storage, { onError })).resolves.toBeTypeOf("function");
+
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
+
+  it("the first write that throws (a storage adapter of the app) rejects setInStorage — and is told", async () => {
+    const onError = vi.fn();
+    const mistake = new Error("set of the app's own adapter");
+    vi.spyOn(storage, "set").mockRejectedValue(mistake);
+
+    await expect(stores[name].persist(storage, { onError })).rejects.toBe(mistake);
+
+    expect(onError.mock.calls[0][0].cause).toBe(mistake);
+  });
+
   it("keeps the store working without onError — a failed write throws nothing", async () => {
     const change = await stores[name].persist(storage, {});
     vi.spyOn(storage, "set").mockResolvedValue(false);
