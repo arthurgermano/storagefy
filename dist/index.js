@@ -15,9 +15,8 @@ const DEFAULT_CONFIG = {
   adapter: "indexedDB"
 };
 let storageAdapter;
-let piniaAdapter;
-let reactAdapter;
-let svelteAdapter;
+const FRAMEWORKS = { pinia: PiniaAdapter, react: ReactAdapter, svelte: SvelteAdapter };
+const keptAdapters = { pinia: null, react: null, svelte: null };
 function startStoragefy(config = {}) {
   const params = { ...DEFAULT_CONFIG, ...config };
   if (config.fresh) {
@@ -33,16 +32,12 @@ function startStoragefy(config = {}) {
   return storageAdapter;
 }
 function _retireStorageAdapter(replaced) {
-  const over = (kept) => {
-    if (kept?.adapter !== replaced) {
-      return kept;
+  for (const name of Object.keys(keptAdapters)) {
+    if (keptAdapters[name]?.adapter === replaced) {
+      keptAdapters[name].destroyAll();
+      keptAdapters[name] = null;
     }
-    kept.destroyAll();
-    return void 0;
-  };
-  piniaAdapter = over(piniaAdapter);
-  reactAdapter = over(reactAdapter);
-  svelteAdapter = over(svelteAdapter);
+  }
   void replaced.destroy();
 }
 function getStorageAdapter() {
@@ -79,29 +74,42 @@ function _createStorageAdapter(params) {
       return new IndexedDBAdapter(params);
   }
 }
-function getPiniaAdapter({ adapter = null, adapterParams = null, forceRecreate = false, fresh = false } = {}) {
+function _adapterFor(name, { adapter = null, adapterParams = null, forceRecreate = false, fresh = false } = {}) {
+  const found = { adapter, adapterParams, forceRecreate };
   if (fresh) {
-    return _getFrameworkAdapter({ adapter, adapterParams, forceRecreate }, null, PiniaAdapter);
+    return _getFrameworkAdapter(found, null, FRAMEWORKS[name]);
   }
-  piniaAdapter = _getFrameworkAdapter({ adapter, adapterParams, forceRecreate }, piniaAdapter, PiniaAdapter);
+  keptAdapters[name] = _getFrameworkAdapter(found, keptAdapters[name], FRAMEWORKS[name]);
+  return keptAdapters[name];
+}
+function _keptAdapterFor(name) {
+  keptAdapters[name] ??= _getFrameworkAdapter({}, null, FRAMEWORKS[name]);
+  return keptAdapters[name];
+}
+function getPiniaAdapter(options = {}) {
+  const piniaAdapter = (
+    /** @type {PiniaAdapter} */
+    _adapterFor("pinia", options)
+  );
+  if (options.fresh) {
+    return piniaAdapter;
+  }
   return {
     setInStorage: piniaAdapter.setInStorage.bind(piniaAdapter),
     getFromStorage: piniaAdapter.getFromStorage.bind(piniaAdapter)
   };
 }
-function getReactAdapter({ adapter = null, adapterParams = null, forceRecreate = false, fresh = false } = {}) {
-  if (fresh) {
-    return _getFrameworkAdapter({ adapter, adapterParams, forceRecreate }, null, ReactAdapter);
-  }
-  reactAdapter = _getFrameworkAdapter({ adapter, adapterParams, forceRecreate }, reactAdapter, ReactAdapter);
-  return reactAdapter;
+function getReactAdapter(options = {}) {
+  return (
+    /** @type {ReactAdapter} */
+    _adapterFor("react", options)
+  );
 }
-function getSvelteAdapter({ adapter = null, adapterParams = null, forceRecreate = false, fresh = false } = {}) {
-  if (fresh) {
-    return _getFrameworkAdapter({ adapter, adapterParams, forceRecreate }, null, SvelteAdapter);
-  }
-  svelteAdapter = _getFrameworkAdapter({ adapter, adapterParams, forceRecreate }, svelteAdapter, SvelteAdapter);
-  return svelteAdapter;
+function getSvelteAdapter(options = {}) {
+  return (
+    /** @type {SvelteAdapter} */
+    _adapterFor("svelte", options)
+  );
 }
 async function _loadAndKeep(storeAdapter, store, key, options) {
   try {
@@ -119,16 +127,13 @@ async function _loadAndKeep(storeAdapter, store, key, options) {
   }
 }
 async function setPiniaStorage(store, key, options = {}) {
-  piniaAdapter ??= _getFrameworkAdapter({}, null, PiniaAdapter);
-  await _loadAndKeep(piniaAdapter, store, key, options);
+  await _loadAndKeep(_keptAdapterFor("pinia"), store, key, options);
 }
 async function setReactStorage(store, key, options = {}) {
-  reactAdapter ??= _getFrameworkAdapter({}, null, ReactAdapter);
-  await _loadAndKeep(reactAdapter, store, key, options);
+  await _loadAndKeep(_keptAdapterFor("react"), store, key, options);
 }
 async function setSvelteStorage(store, key, options = {}) {
-  svelteAdapter ??= _getFrameworkAdapter({}, null, SvelteAdapter);
-  await _loadAndKeep(svelteAdapter, store, key, options);
+  await _loadAndKeep(_keptAdapterFor("svelte"), store, key, options);
 }
 export {
   IndexedDBAdapter,

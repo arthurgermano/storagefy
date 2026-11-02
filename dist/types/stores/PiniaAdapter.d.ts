@@ -1,6 +1,7 @@
 export default PiniaAdapter;
 /**
- * Pinia storage adapter: keeps a Pinia store's state in a storage adapter.
+ * Pinia storage adapter: keeps a Pinia store's state in a storage adapter. The first write of setInStorage is made at
+ * once (unless storage already holds the state), and it throws when that write threw.
  * @class PiniaAdapter
  * @extends StoreAdapter
  * @example
@@ -9,12 +10,5 @@ export default PiniaAdapter;
  * await piniaAdapter.setInStorage(useUserStore(), "user-state", { ignoreKeys: ["draft"] });
  */
 declare class PiniaAdapter extends StoreAdapter {
-    /**
-     * Validates that a Pinia store has the required methods.
-     * @private
-     * @param {any} store
-     * @throws {Error} If it is not a Pinia store.
-     */
-    private _checkStore;
 }
 import StoreAdapter from "./StoreAdapter.js";

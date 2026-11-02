@@ -2,6 +2,11 @@ export default ReactAdapter;
 /**
  * React state persistence adapter: keeps the state of a Redux, Zustand or compatible store (one with subscribe and
  * getState/setState) in a storage adapter.
+ *
+ * The state is read with getState, or get; a store with neither is read from what it passes its listeners — a
+ * notification that passes nothing writes nothing. A store that tells its state (getState), as Redux and Zustand do,
+ * is written at once by setInStorage (unless storage already holds it; a failed write is told through onError);
+ * the others on their first change. A null or undefined state removes the stored key.
  * @class ReactAdapter
  * @extends StoreAdapter
  * @example
@@ -16,6 +21,16 @@ export default ReactAdapter;
  */
 declare class ReactAdapter extends StoreAdapter {
     /**
+     * Dispatched to Redux (SET_STATE_FROM_STORAGE), set in the others.
+     * @protected
+     * @param {any} store
+     * @param {string} key
+     * @param {any} value
+     * @returns {boolean}
+     * @throws {Error} If the store cannot be set (no dispatch nor setState).
+     */
+    protected _load(store: any, key: string, value: any): boolean;
+    /**
      * Sets a whole state with setState: an object is merged as setState does; anything else (an array, a number…)
      * replaces the state — merged, an array would become an object.
      * @private
@@ -23,27 +38,5 @@ declare class ReactAdapter extends StoreAdapter {
      * @param {any} state
      */
     private _setState;
-    /**
-     * The store's state now, as far as its interface tells.
-     * @private
-     * @param {any} store
-     * @returns {any}
-     */
-    private _currentOf;
-    /**
-     * Puts another tab's state in the store, the way its library updates.
-     * @private
-     * @param {any} store
-     * @param {object} incoming
-     */
-    private _apply;
-    /**
-     * Validates that a store can be kept: it has subscribe, and a way to be read or set that this adapter uses
-     * (getState, setState, get, set or update).
-     * @private
-     * @param {any} store
-     * @throws {Error} If it cannot be kept.
-     */
-    private _checkStore;
 }
 import StoreAdapter from "./StoreAdapter.js";

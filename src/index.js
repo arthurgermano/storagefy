@@ -27,7 +27,7 @@ const DEFAULT_CONFIG = {
   encrypt: false,
   expireCheckInterval: 1000,
   description: "Storagefy database",
-  adapter: "indexedDB"
+  adapter: "indexedDB",
 };
 
 // ------------------------------------------------------------------------------------------------
@@ -35,9 +35,12 @@ const DEFAULT_CONFIG = {
 // ------------------------------------------------------------------------------------------------
 
 let storageAdapter;
-let piniaAdapter;
-let reactAdapter;
-let svelteAdapter;
+
+/** The store adapter classes, by library */
+const FRAMEWORKS = { pinia: PiniaAdapter, react: ReactAdapter, svelte: SvelteAdapter };
+
+/** The store adapter the helpers keep for each library (getPiniaAdapter, setPiniaStorage…) — none until asked */
+const keptAdapters = { pinia: null, react: null, svelte: null };
 
 /**
  * Initializes and returns a storage adapter instance.
@@ -58,14 +61,15 @@ let svelteAdapter;
  * @param {string} [config.description="Storagefy database"] Database description
  * @param {boolean} [config.forceRecreate=false] Replace the adapter kept with a new one: the old one is destroyed, and
  *   the store adapters kept over it stop keeping their stores (keep them again)
- * @param {boolean} [config.fresh=false] Force creation of new adapter and return a new instance - does not re-use existing adapter or update it
+ * @param {boolean} [config.fresh=false] Return a new adapter, kept by nobody — the adapter kept (if any) stays as it
+ *   is
  * @param {"indexedDB"|"localStorage"|"sessionStorage"} [config.adapter="indexedDB"] Storage adapter type
  * @returns {IndexedDBAdapter|LocalStorageAdapter|SessionStorageAdapter} Storage adapter instance
  * @throws {Error} If adapter initialization fails
  * @example
  * // Basic usage
  * const adapter = startStoragefy({ dbName: 'my-app' });
- * 
+ *
  * // With encryption
  * const secureAdapter = startStoragefy({
  *   dbName: 'secure-app',
@@ -99,16 +103,12 @@ function startStoragefy(config = {}) {
  * @param {IndexedDBAdapter|LocalStorageAdapter|SessionStorageAdapter} replaced
  */
 function _retireStorageAdapter(replaced) {
-  const over = (kept) => {
-    if (kept?.adapter !== replaced) {
-      return kept;
+  for (const name of Object.keys(keptAdapters)) {
+    if (keptAdapters[name]?.adapter === replaced) {
+      keptAdapters[name].destroyAll();
+      keptAdapters[name] = null;
     }
-    kept.destroyAll();
-    return undefined;
-  };
-  piniaAdapter = over(piniaAdapter);
-  reactAdapter = over(reactAdapter);
-  svelteAdapter = over(svelteAdapter);
+  }
   void replaced.destroy();
 }
 
@@ -193,17 +193,52 @@ function _createStorageAdapter(params) {
 // ------------------------------------------------------------------------------------------------
 
 /**
+ * The store adapter of a library that a get*Adapter helper answers: the one kept (created or replaced as the options
+ * say), or with `fresh` a new one, kept by nobody.
+ * @private
+ * @param {keyof FRAMEWORKS} name
+ * @param {FrameworkAdapterOptions} [options]
+ * @returns {PiniaAdapter|ReactAdapter|SvelteAdapter}
+ * @throws {Error} If no storage adapter was given or started.
+ */
+function _adapterFor(name, { adapter = null, adapterParams = null, forceRecreate = false, fresh = false } = {}) {
+  const found = { adapter, adapterParams, forceRecreate };
+  if (fresh) {
+    return _getFrameworkAdapter(found, null, FRAMEWORKS[name]);
+  }
+  keptAdapters[name] = _getFrameworkAdapter(found, keptAdapters[name], FRAMEWORKS[name]);
+  return keptAdapters[name];
+}
+
+// ------------------------------------------------------------------------------------------------
+
+/**
+ * The store adapter of a library that a set*Storage helper uses: the one kept — created over the storage adapter
+ * startStoragefy created, the first time.
+ * @private
+ * @param {keyof FRAMEWORKS} name
+ * @returns {PiniaAdapter|ReactAdapter|SvelteAdapter}
+ * @throws {Error} If no storage adapter was started.
+ */
+function _keptAdapterFor(name) {
+  keptAdapters[name] ??= _getFrameworkAdapter({}, null, FRAMEWORKS[name]);
+  return keptAdapters[name];
+}
+
+// ------------------------------------------------------------------------------------------------
+
+/**
  * Gets a Pinia store adapter's methods.
  * @param {FrameworkAdapterOptions} [options]
  * @returns {{ setInStorage: PiniaAdapter["setInStorage"], getFromStorage: PiniaAdapter["getFromStorage"] }} The
  *   methods of the adapter kept — or, with `fresh`, a new adapter (it has the same methods).
  * @throws {Error} If no storage adapter was given or started.
  */
-function getPiniaAdapter({ adapter = null, adapterParams = null, forceRecreate = false, fresh = false } = {}) {
-  if (fresh) {
-    return _getFrameworkAdapter({ adapter, adapterParams, forceRecreate }, null, PiniaAdapter);
+function getPiniaAdapter(options = {}) {
+  const piniaAdapter = /** @type {PiniaAdapter} */ (_adapterFor("pinia", options));
+  if (options.fresh) {
+    return piniaAdapter;
   }
-  piniaAdapter = _getFrameworkAdapter({ adapter, adapterParams, forceRecreate }, piniaAdapter, PiniaAdapter);
   return {
     setInStorage: piniaAdapter.setInStorage.bind(piniaAdapter),
     getFromStorage: piniaAdapter.getFromStorage.bind(piniaAdapter),
@@ -218,12 +253,8 @@ function getPiniaAdapter({ adapter = null, adapterParams = null, forceRecreate =
  * @returns {ReactAdapter} The adapter kept — or, with `fresh`, a new one.
  * @throws {Error} If no storage adapter was given or started.
  */
-function getReactAdapter({ adapter = null, adapterParams = null, forceRecreate = false, fresh = false } = {}) {
-  if (fresh) {
-    return _getFrameworkAdapter({ adapter, adapterParams, forceRecreate }, null, ReactAdapter);
-  }
-  reactAdapter = _getFrameworkAdapter({ adapter, adapterParams, forceRecreate }, reactAdapter, ReactAdapter);
-  return reactAdapter;
+function getReactAdapter(options = {}) {
+  return /** @type {ReactAdapter} */ (_adapterFor("react", options));
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -234,12 +265,8 @@ function getReactAdapter({ adapter = null, adapterParams = null, forceRecreate =
  * @returns {SvelteAdapter} The adapter kept — or, with `fresh`, a new one.
  * @throws {Error} If no storage adapter was given or started.
  */
-function getSvelteAdapter({ adapter = null, adapterParams = null, forceRecreate = false, fresh = false } = {}) {
-  if (fresh) {
-    return _getFrameworkAdapter({ adapter, adapterParams, forceRecreate }, null, SvelteAdapter);
-  }
-  svelteAdapter = _getFrameworkAdapter({ adapter, adapterParams, forceRecreate }, svelteAdapter, SvelteAdapter);
-  return svelteAdapter;
+function getSvelteAdapter(options = {}) {
+  return /** @type {SvelteAdapter} */ (_adapterFor("svelte", options));
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -282,8 +309,7 @@ async function _loadAndKeep(storeAdapter, store, key, options) {
  * @throws {Error} If the store or the key is missing, or no storage adapter was started.
  */
 async function setPiniaStorage(store, key, options = {}) {
-  piniaAdapter ??= _getFrameworkAdapter({}, null, PiniaAdapter);
-  await _loadAndKeep(piniaAdapter, store, key, options);
+  await _loadAndKeep(_keptAdapterFor("pinia"), store, key, options);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -297,8 +323,7 @@ async function setPiniaStorage(store, key, options = {}) {
  * @throws {Error} If the store or the key is missing, or no storage adapter was started.
  */
 async function setReactStorage(store, key, options = {}) {
-  reactAdapter ??= _getFrameworkAdapter({}, null, ReactAdapter);
-  await _loadAndKeep(reactAdapter, store, key, options);
+  await _loadAndKeep(_keptAdapterFor("react"), store, key, options);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -312,8 +337,7 @@ async function setReactStorage(store, key, options = {}) {
  * @throws {Error} If the store or the key is missing, or no storage adapter was started.
  */
 async function setSvelteStorage(store, key, options = {}) {
-  svelteAdapter ??= _getFrameworkAdapter({}, null, SvelteAdapter);
-  await _loadAndKeep(svelteAdapter, store, key, options);
+  await _loadAndKeep(_keptAdapterFor("svelte"), store, key, options);
 }
 
 // ------------------------------------------------------------------------------------------------

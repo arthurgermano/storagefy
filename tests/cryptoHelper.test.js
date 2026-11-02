@@ -1,8 +1,8 @@
 import { base64To } from "misc-helpers";
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { encryptData } from "./__fixtures__/legacyFormat.js";
 import {
   deriveKey,
-  encryptData,
   decryptData,
   generateSalt,
   generateKeyMaterial,

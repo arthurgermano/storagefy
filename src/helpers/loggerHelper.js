@@ -8,13 +8,13 @@ globalThis.storagefyDebug ??= false;
 /**
  * Global debug level.
  * Controls the verbosity of logs.
- * 
+ *
  * Levels:
  * - 0: Only errors
  * - 1: Warnings
  * - 2: Info
  * - 3: Trace
- * 
+ *
  * @type {number}
  */
 globalThis.storagefyDebugLevel ??= 0;
@@ -23,7 +23,7 @@ globalThis.storagefyDebugLevel ??= 0;
 
 /**
  * Logs an error message if `storagefyDebug` is enabled.
- * 
+ *
  * @param {...any} args - Arguments to log.
  */
 export const logError = (...args) => {
@@ -36,8 +36,22 @@ export const logError = (...args) => {
 // ------------------------------------------------------------------------------------------------
 
 /**
+ * Logs an error message (see logError) and throws it — a misuse Storagefy refuses.
+ *
+ * @param {string} message
+ * @returns {never}
+ * @throws {Error} Always, with the message.
+ */
+export const logAndThrow = (message) => {
+  logError(message);
+  throw new Error(message);
+};
+
+// ------------------------------------------------------------------------------------------------
+
+/**
  * Logs a warning message if `storagefyDebug` is enabled and level is >= 1.
- * 
+ *
  * @param {...any} args - Arguments to log.
  */
 export const logWarn = (...args) => {
@@ -51,7 +65,7 @@ export const logWarn = (...args) => {
 
 /**
  * Logs an info message if `storagefyDebug` is enabled and level is >= 2.
- * 
+ *
  * @param {...any} args - Arguments to log.
  */
 export const logInfo = (...args) => {
@@ -65,7 +79,7 @@ export const logInfo = (...args) => {
 
 /**
  * Logs a trace message if `storagefyDebug` is enabled and level is >= 3.
- * 
+ *
  * @param {...any} args - Arguments to log.
  */
 export const logTrace = (...args) => {

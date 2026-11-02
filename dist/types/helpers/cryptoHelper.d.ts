@@ -66,10 +66,6 @@ export const DEFAULT_KEY_DERIVATION: "hkdf";
 /** The format of the values written since 1.3.0 */
 export const ENVELOPE_VERSION: 2;
 export function deriveKey(password: string, salt?: string, extractable?: boolean, keyDerivation?: "hkdf" | "pbkdf2"): Promise<CryptoKey>;
-export function encryptData(key: CryptoKey, dataObj: any, raw?: boolean): Promise<{
-    iv: string | Uint8Array;
-    data: string | Uint8Array;
-}>;
 export function decryptData(key: CryptoKey, encryptedObj: {
     iv: string | Uint8Array;
     data: string | Uint8Array;

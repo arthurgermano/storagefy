@@ -68,7 +68,8 @@ const deriveKey = async (password, salt, extractable = false, keyDerivation = "p
 async function sealText(key, text, keyDerivation) {
   const iv = webCrypto().getRandomValues(new Uint8Array(IV_BYTES));
   const encrypted = await webCrypto().subtle.encrypt({ name: "AES-GCM", iv }, key, ENCODER.encode(text));
-  return { v: ENVELOPE_VERSION, kdf: keyDerivation, iv: bytesToBase64(iv), data: bytesToBase64(new Uint8Array(encrypted)) };
+  const data = bytesToBase64(new Uint8Array(encrypted));
+  return { v: ENVELOPE_VERSION, kdf: keyDerivation, iv: bytesToBase64(iv), data };
 }
 async function openText(key, envelope) {
   const decrypted = await webCrypto().subtle.decrypt(
@@ -78,24 +79,6 @@ async function openText(key, envelope) {
   );
   return DECODER.decode(decrypted);
 }
-const encryptData = async (key, dataObj, raw = false) => {
-  if (dataObj === void 0 || typeof dataObj === "function" || typeof dataObj === "symbol") {
-    throw new Error("Invalid data type for encryption");
-  }
-  try {
-    logInfo("CryptoHelper - Encrypting data", { raw });
-    const iv = webCrypto().getRandomValues(new Uint8Array(IV_BYTES));
-    const encoded = ENCODER.encode(JSON.stringify(dataObj));
-    const encrypted = new Uint8Array(await webCrypto().subtle.encrypt({ name: "AES-GCM", iv }, key, encoded));
-    if (raw) {
-      return { iv, data: encrypted };
-    }
-    return { iv: base64To(bytesToBinary(iv)), data: base64To(bytesToBinary(encrypted)) };
-  } catch (error) {
-    logError("Error encrypting data:", error);
-    throw error;
-  }
-};
 const decryptData = async (key, encryptedObj, raw = false) => {
   try {
     logInfo("CryptoHelper - Decrypting data", { raw });
@@ -142,7 +125,6 @@ export {
   bytesToBase64,
   decryptData,
   deriveKey,
-  encryptData,
   isKeyDerivation,
   openText,
   sealText,

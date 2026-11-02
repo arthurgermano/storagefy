@@ -3,6 +3,7 @@ import { Window } from "happy-dom";
 import "fake-indexeddb/auto";
 import { IDBFactory } from "fake-indexeddb";
 import * as cryptoHelper from "../../src/helpers/cryptoHelper.js";
+import { encryptData } from "../__fixtures__/legacyFormat.js";
 import LocalStorageAdapter from "../../src/adapters/LocalStorageAdapter.js";
 import SessionStorageAdapter from "../../src/adapters/SessionStorageAdapter.js";
 import IndexedDBAdapter from "../../src/adapters/IndexedDBAdapter.js";
@@ -27,7 +28,7 @@ function derivationsOf(key) {
 /** A value as 1.2.x stored it: PBKDF2, the JSON text encrypted as a JSON string */
 async function encryptLikeBefore(key, value) {
   const cKey = await realDeriveKey(key);
-  return JSON.stringify(await cryptoHelper.encryptData(cKey, JSON.stringify(value), false));
+  return JSON.stringify(await encryptData(cKey, JSON.stringify(value), false));
 }
 
 /** A stored value opened as 1.2.x did */

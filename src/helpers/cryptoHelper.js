@@ -16,8 +16,8 @@ import { base64To, base64From } from "misc-helpers";
 // Formats of a stored value:
 //   - since 1.3.0: { v: 2, kdf, iv, data } — standard base64 of the bytes; kdf says how the key was derived, so a value
 //     is read the way it was written, whatever the adapter's option is now
-//   - up to 1.2.x: { iv, data } — PBKDF2, and the bytes turned into text before base64. Still read; written again in
-//     the new format on the next write of the key
+//   - up to 1.2.x: { iv, data } — PBKDF2, and the bytes turned into text before base64. Still read (decryptData);
+//     written again in the new format on the next write of the key
 // ------------------------------------------------------------------------------------------------
 
 const ENCODER = new TextEncoder();
@@ -169,7 +169,8 @@ export const deriveKey = async (password, salt, extractable = false, keyDerivati
 export async function sealText(key, text, keyDerivation) {
   const iv = webCrypto().getRandomValues(new Uint8Array(IV_BYTES));
   const encrypted = await webCrypto().subtle.encrypt({ name: "AES-GCM", iv }, key, ENCODER.encode(text));
-  return { v: ENVELOPE_VERSION, kdf: keyDerivation, iv: bytesToBase64(iv), data: bytesToBase64(new Uint8Array(encrypted)) };
+  const data = bytesToBase64(new Uint8Array(encrypted));
+  return { v: ENVELOPE_VERSION, kdf: keyDerivation, iv: bytesToBase64(iv), data };
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -193,38 +194,6 @@ export async function openText(key, envelope) {
 // ------------------------------------------------------------------------------------------------
 
 /**
- * Encrypts a JavaScript value in the format of 1.2.x ({ iv, data }) — kept for callers of this helper; the adapters
- * write with sealText since 1.3.0.
- * @param {CryptoKey} key - The AES key.
- * @param {any} dataObj - The data to encrypt.
- * @param {boolean} [raw=false] - If true, returns raw bytes.
- * @returns {Promise<{ iv: string|Uint8Array, data: string|Uint8Array }>} The encrypted data (base64 or raw format).
- * @throws {Error} If the value cannot be encrypted (undefined, a function, a symbol) or encryption fails.
- */
-export const encryptData = async (key, dataObj, raw = false) => {
-  if (dataObj === undefined || typeof dataObj === "function" || typeof dataObj === "symbol") {
-    throw new Error("Invalid data type for encryption");
-  }
-
-  try {
-    logInfo("CryptoHelper - Encrypting data", { raw });
-    const iv = webCrypto().getRandomValues(new Uint8Array(IV_BYTES));
-    const encoded = ENCODER.encode(JSON.stringify(dataObj));
-    const encrypted = new Uint8Array(await webCrypto().subtle.encrypt({ name: "AES-GCM", iv }, key, encoded));
-
-    if (raw) {
-      return { iv, data: encrypted };
-    }
-    return { iv: base64To(bytesToBinary(iv)), data: base64To(bytesToBinary(encrypted)) };
-  } catch (error) {
-    logError("Error encrypting data:", error);
-    throw error;
-  }
-};
-
-// ------------------------------------------------------------------------------------------------
-
-/**
  * Decrypts data in the format of 1.2.x ({ iv, data }) — values written before 1.3.0 are read with it.
  * @param {CryptoKey} key - The AES key.
  * @param {{ iv: string|Uint8Array, data: string|Uint8Array }} encryptedObj - Encrypted data.
@@ -236,7 +205,8 @@ export const decryptData = async (key, encryptedObj, raw = false) => {
   try {
     logInfo("CryptoHelper - Decrypting data", { raw });
     // Up to 1.2.x the bytes were turned into text and that text into base64: reversed the same way
-    const decode = (value) => (raw ? new Uint8Array(value) : Uint8Array.from(base64From(value), (char) => char.charCodeAt(0)));
+    const decode = (value) =>
+      raw ? new Uint8Array(value) : Uint8Array.from(base64From(value), (char) => char.charCodeAt(0));
     const decrypted = await webCrypto().subtle.decrypt(
       { name: "AES-GCM", iv: decode(encryptedObj.iv) },
       key,

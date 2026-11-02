@@ -1,43 +1,22 @@
 import StorageAdapter from "./StorageAdapter.js";
-import { generateSimpleId } from "misc-helpers";
-import { logError, logInfo } from "../helpers/loggerHelper.js";
+import { logAndThrow, logError, logInfo } from "../helpers/loggerHelper.js";
 class WebStorageAdapter extends StorageAdapter {
   /**
    * @param {import("./StorageAdapter.js").StorageAdapterOptions} options
    * @param {WebStorageKind} kind
    * @throws {Error} If the storage is not available, or an encryption option is invalid.
    */
-  constructor({
-    dbName,
-    version = 1,
-    encrypt = false,
-    password = null,
-    keyDerivation,
-    expireCheckInterval = 1e3,
-    description = "",
-    channelName = false,
-    enableSyncTabs = false
-  }, kind) {
+  constructor(options, kind) {
     if (typeof globalThis[kind.storageName] === "undefined") {
-      logError(`${kind.label} is not available in this environment`);
-      throw new Error(`${kind.label} is not available in this environment`);
+      logAndThrow(`${kind.label} is not available in this environment`);
     }
-    super(channelName);
+    super(options);
+    const { dbName, version = 1, description = "" } = options;
     this.kind = kind;
-    this.dbName = dbName;
-    this.encrypt = encrypt;
-    this._setEncryption(password, keyDerivation);
-    this.expireKey = `STRGF_${dbName}__expires`;
-    this.metaKey = `STRGF_${dbName}__meta`;
-    this.revisionKey = `STRGF_${dbName}__revisions`;
-    this.prefix = `${dbName}__`;
-    this.adapterId = generateSimpleId(dbName);
-    this.expireCheckInterval = expireCheckInterval;
-    this.enableSyncTabs = enableSyncTabs || false;
     this.sharedBetweenTabs = kind.shared;
     this._initMeta({ dbName, version, description });
     this._startExpireWatcher();
-    logInfo(`${kind.label}Adapter - initialized with dbName: ${dbName}, encrypt: ${encrypt}`);
+    logInfo(`${kind.label}Adapter - initialized with dbName: ${dbName}, encrypt: ${this.encrypt}`);
   }
   // ----------------------------------------------------------------------------------------------
   /**
@@ -63,18 +42,41 @@ class WebStorageAdapter extends StorageAdapter {
   }
   // ----------------------------------------------------------------------------------------------
   /**
-   * The expiration timestamps of the namespace.
+   * A record of the namespace (expirations, revisions) — empty when there is none, or it is not JSON (logged).
    * @private
+   * @param {string} recordKey
+   * @returns {Object<string, any>}
+   */
+  _loadRecord(recordKey) {
+    try {
+      const raw = this._storage.getItem(recordKey);
+      return raw ? JSON.parse(raw) : {};
+    } catch (err) {
+      logError(`Error loading ${recordKey}:`, err);
+      return {};
+    }
+  }
+  // ----------------------------------------------------------------------------------------------
+  /**
+   * Removes the entry of a key from a record of the namespace — written only when the key had one.
+   * @private
+   * @param {string} recordKey
+   * @param {string} key - The key of the entry (expirations: the storage key; revisions: as stored).
+   */
+  _forgetEntry(recordKey, key) {
+    const record = this._loadRecord(recordKey);
+    if (this._removeEntry(record, key)) {
+      this._storage.setItem(recordKey, JSON.stringify(record));
+    }
+  }
+  // ----------------------------------------------------------------------------------------------
+  /**
+   * The expiration timestamps of the namespace.
+   * @protected
    * @returns {Object<string, number>}
    */
   _loadExpires() {
-    try {
-      const raw = this._storage.getItem(this.expireKey);
-      return raw ? JSON.parse(raw) : {};
-    } catch (err) {
-      logError("Error loading expires:", err);
-      return {};
-    }
+    return this._loadRecord(this.expireKey);
   }
   // ----------------------------------------------------------------------------------------------
   /**
@@ -84,48 +86,6 @@ class WebStorageAdapter extends StorageAdapter {
    */
   _saveExpires(expires) {
     this._storage.setItem(this.expireKey, JSON.stringify(expires));
-  }
-  // ----------------------------------------------------------------------------------------------
-  /**
-   * Forgets the expiration of a key — written only when the key had one.
-   * @private
-   * @param {string} key
-   */
-  _forgetExpire(key) {
-    const expires = this._loadExpires();
-    if (key in expires) {
-      delete expires[key];
-      this._saveExpires(expires);
-    }
-  }
-  // ----------------------------------------------------------------------------------------------
-  /**
-   * The revisions of the namespace (see StorageAdapter._revisionIn).
-   * @private
-   * @returns {Object<string, unknown>}
-   */
-  _loadRevisions() {
-    try {
-      const raw = this._storage.getItem(this.revisionKey);
-      return raw ? JSON.parse(raw) : {};
-    } catch (err) {
-      logError("Error loading revisions:", err);
-      return {};
-    }
-  }
-  // ----------------------------------------------------------------------------------------------
-  /**
-   * Forgets the revision of a key — written only when the key had one.
-   * @private
-   * @param {string} key
-   */
-  _forgetRevision(key) {
-    const revisions = this._loadRevisions();
-    const fullKey = this._fullKey(key);
-    if (fullKey in revisions) {
-      delete revisions[fullKey];
-      this._storage.setItem(this.revisionKey, JSON.stringify(revisions));
-    }
   }
   // ----------------------------------------------------------------------------------------------
   /**
@@ -170,7 +130,7 @@ class WebStorageAdapter extends StorageAdapter {
         await this._expire(key);
         return { value: null };
       }
-      const revision = this._revisionIn(this._loadRevisions(), key);
+      const revision = this._revisionIn(this._loadRecord(this.revisionKey), key);
       return { value: await this._decrypt(key, raw), revision };
     } catch (err) {
       this._reportReadFailure(key, options, err);
@@ -179,58 +139,54 @@ class WebStorageAdapter extends StorageAdapter {
   }
   // ----------------------------------------------------------------------------------------------
   /**
-   * Stores a value, with its revision — read and raised with the write, in one run that nothing in this tab
-   * interrupts. Another tab's write may land in between all the same (localStorage orders no write of one tab with
-   * another's): see _onStoredChange. Writes of a key are applied in the order they were called.
+   * Writes a stored text now, with its expiration and its revision — read and raised with the write, in one run that
+   * nothing in this tab interrupts. Another tab's write may land in between all the same (localStorage orders no write
+   * of one tab with another's): see _onStoredChange.
+   * @protected
    * @param {string} key
-   * @param {any} value - JSON; null or undefined removes the key.
-   * @param {number} [expire] - Expiration in milliseconds from now; 0 or less removes the key.
-   * @returns {Promise<boolean|null>} true when stored, false when it failed, null when the key was removed.
+   * @param {string} stored
+   * @param {number|null} expiresAt
+   * @returns {Promise<import("../helpers/revisions.js").NextRevision>}
+   * @throws {Error} If the storage refused it (e.g. it is full: QuotaExceededError).
    */
-  async set(key, value, expire) {
-    return this._inOrder(key, async () => {
-      try {
-        if (!key && !value) return false;
-        if (value === void 0 || value === null || typeof expire === "number" && expire <= 0) {
-          this._deleteNow(key);
-          return null;
-        }
-        const stored = await this._encrypt(key, JSON.stringify(value));
-        if (stored === null) return false;
-        const fullKey = this._fullKey(key);
-        const revisions = this._loadRevisions();
-        const next = this._nextRevision(key, revisions[fullKey]);
-        if (this._storage.getItem(fullKey) === stored) {
-          this._storage.removeItem(fullKey);
-        }
-        this._storage.setItem(fullKey, stored);
-        if (typeof expire === "number") {
-          this._saveExpires({ ...this._loadExpires(), [key]: Date.now() + expire });
-        } else {
-          this._forgetExpire(key);
-        }
-        this._storage.setItem(this.revisionKey, JSON.stringify({ ...revisions, [fullKey]: next.revision }));
-        this._wrote(key, next);
-        if (this.enableSyncTabs) {
-          this.emitDataChange(key, stored, "set", next.revision);
-        }
-        return true;
-      } catch (err) {
-        logError(`Error setting key '${key}':`, err);
-        return false;
-      }
-    });
+  async _writeNow(key, stored, expiresAt) {
+    const fullKey = this._fullKey(key);
+    const revisions = this._loadRecord(this.revisionKey);
+    const next = this.revisions.next(key, revisions[fullKey]);
+    if (this._storage.getItem(fullKey) === stored) {
+      this._storage.removeItem(fullKey);
+    }
+    this._storage.setItem(fullKey, stored);
+    if (expiresAt !== null) {
+      this._saveExpires({ ...this._loadExpires(), [key]: expiresAt });
+    } else {
+      this._forgetEntry(this.expireKey, key);
+    }
+    this._storage.setItem(this.revisionKey, JSON.stringify({ ...revisions, [fullKey]: next.revision }));
+    return next;
   }
   // ----------------------------------------------------------------------------------------------
   /**
-   * Removes a key and its expiration, and tells the other tabs.
-   * @private
-   * @param {string} key
+   * The stored value goes with the message: sessionStorage is not shared between tabs, and a write to localStorage
+   * may reach the other tabs after the message does (Firefox) — read there, it would be the old one.
+   * @protected
+   * @param {string} stored
+   * @returns {string}
    */
-  _deleteNow(key) {
+  _messageValue(stored) {
+    return stored;
+  }
+  // ----------------------------------------------------------------------------------------------
+  /**
+   * Removes a key, its expiration and its revision, and tells the other tabs.
+   * @protected
+   * @param {string} key
+   * @returns {Promise<void>}
+   */
+  async _deleteNow(key) {
     this._storage.removeItem(this._fullKey(key));
-    this._forgetExpire(key);
-    this._forgetRevision(key);
+    this._forgetEntry(this.expireKey, key);
+    this._forgetEntry(this.revisionKey, this._fullKey(key));
     if (this.enableSyncTabs) {
       this.emitDataChange(key, void 0, "delete");
     }
@@ -246,7 +202,7 @@ class WebStorageAdapter extends StorageAdapter {
     return this._inOrder(key, async () => {
       try {
         if (this._isExpired(this._loadExpires()[key])) {
-          this._deleteNow(key);
+          await this._deleteNow(key);
         }
       } catch (err) {
         logError(`Error expiring key '${key}':`, err);
@@ -255,41 +211,17 @@ class WebStorageAdapter extends StorageAdapter {
   }
   // ----------------------------------------------------------------------------------------------
   /**
-   * Deletes a value and its expiration — after the writes of the key asked before.
-   * @param {string} key
-   * @returns {Promise<void>}
+   * Every key of the storage, as stored. Reading the storage throws only when the page may not use it
+   * (SecurityError): passed on, as before.
+   * @protected
+   * @returns {Promise<string[]>}
    */
-  async delete(key) {
-    return this._inOrder(key, async () => {
-      try {
-        this._deleteNow(key);
-      } catch (err) {
-        logError(`Error deleting key '${key}':`, err);
-      }
-    });
-  }
-  // ----------------------------------------------------------------------------------------------
-  /**
-   * The keys and values of the namespace whose key starts with a prefix.
-   * @param {string} [prefix=""] - Prefix of the keys (without the namespace).
-   * @returns {Promise<Array<{ key: string, value: any }>>}
-   */
-  async list(prefix = "") {
+  async _storedKeys() {
     const keys = [];
     for (let i = 0; i < this._storage.length; i++) {
-      const key = this._ownKey(this._storage.key(i), prefix);
-      if (key !== null) {
-        keys.push(key);
-      }
+      keys.push(this._storage.key(i));
     }
-    const results = [];
-    for (const key of keys) {
-      const value = await this.get(key);
-      if (value !== null) {
-        results.push({ key, value });
-      }
-    }
-    return results;
+    return keys;
   }
   // ----------------------------------------------------------------------------------------------
   /**
@@ -309,39 +241,16 @@ class WebStorageAdapter extends StorageAdapter {
   }
   // ----------------------------------------------------------------------------------------------
   /**
-   * Clears every key of the namespace, its metadata and its expirations — after the writes asked before (see
-   * StorageAdapter._exclusive).
+   * Removes every key of the namespace and the expirations and revisions records (and the metadata, when asked), now,
+   * and tells the other tabs.
+   * @protected
+   * @param {boolean} withMeta - Remove the metadata too (clear).
    * @returns {Promise<void>}
    */
-  async clear() {
-    return this._exclusive(async () => {
-      this._resetNow();
-      try {
-        this._storage.removeItem(this.metaKey);
-      } catch (err) {
-        logError("Error clearing storage:", err);
-      }
-    });
-  }
-  // ----------------------------------------------------------------------------------------------
-  /**
-   * Removes every key of the namespace and their expirations (the metadata stays), and tells the other tabs — after
-   * the writes asked before (see StorageAdapter._exclusive).
-   * @returns {Promise<void>}
-   */
-  async reset() {
-    return this._exclusive(async () => this._resetNow());
-  }
-  // ----------------------------------------------------------------------------------------------
-  /**
-   * Removes every key of the namespace and the expirations record, now.
-   * @private
-   */
-  _resetNow() {
+  async _resetNow(withMeta) {
     try {
       const keys = [];
-      for (let i = 0; i < this._storage.length; i++) {
-        const stored = this._storage.key(i);
+      for (const stored of await this._storedKeys()) {
         const key = this._ownKey(stored);
         if (key !== null) {
           keys.push({ stored, key });
@@ -355,8 +264,11 @@ class WebStorageAdapter extends StorageAdapter {
           this.emitDataChange(key, void 0, "reset");
         }
       }
+      if (withMeta) {
+        this._storage.removeItem(this.metaKey);
+      }
     } catch (err) {
-      logError("Error resetting storage:", err);
+      logError(withMeta ? "Error clearing storage:" : "Error resetting storage:", err);
     }
   }
   // ----------------------------------------------------------------------------------------------
@@ -381,22 +293,9 @@ class WebStorageAdapter extends StorageAdapter {
    */
   async deleteExpire(key) {
     try {
-      this._forgetExpire(key);
+      this._forgetEntry(this.expireKey, key);
     } catch (err) {
       logError(`Error deleting expire for key '${key}':`, err);
-    }
-  }
-  // ----------------------------------------------------------------------------------------------
-  /**
-   * Removes every expired key.
-   * @returns {Promise<void>}
-   */
-  async clearExpire() {
-    const expires = this._loadExpires();
-    for (const key of Object.keys(expires)) {
-      if (this._isExpired(expires[key])) {
-        await this._expire(key);
-      }
     }
   }
 }

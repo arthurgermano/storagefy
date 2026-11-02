@@ -10,8 +10,7 @@
  */
 
 import StorageAdapter from "./StorageAdapter.js";
-import { generateSimpleId } from "misc-helpers";
-import { logError, logInfo, logWarn } from "../helpers/loggerHelper.js";
+import { logAndThrow, logError, logInfo, logWarn } from "../helpers/loggerHelper.js";
 
 // -------------------------------------------------------------------------------------------------
 
@@ -25,39 +24,18 @@ class IndexedDBAdapter extends StorageAdapter {
    *   object store (defaults to `${dbName}_store`).
    * @throws {Error} If IndexedDB is not available, or an encryption option is invalid.
    */
-  constructor({
-    dbName,
-    storeName,
-    version = 1,
-    encrypt = false,
-    password = null,
-    keyDerivation,
-    expireCheckInterval = 1000,
-    channelName = false,
-    enableSyncTabs = false,
-    description = "",
-  }) {
+  constructor(options) {
     // Checked before anything is opened: a missing IndexedDB leaves no channel behind
     if (typeof indexedDB === "undefined") {
-      logError("IndexedDB is not available in this environment");
-      throw new Error("IndexedDB is not available in this environment");
+      logAndThrow("IndexedDB is not available in this environment");
     }
-    super(channelName);
+    super(options);
+    const { dbName, storeName, version = 1, description = "" } = options;
 
     this.isReady = false;
-    this.dbName = dbName;
     this.storeName = storeName || `${dbName}_store`;
-    this.encrypt = encrypt;
-    this._setEncryption(password, keyDerivation);
-    this.expireKey = `STRGF_${dbName}__expires`;
-    this.metaKey = `STRGF_${dbName}__meta`;
-    this.revisionKey = `STRGF_${dbName}__revisions`;
-    this.prefix = `${dbName}__`;
-    this.adapterId = generateSimpleId(dbName);
-    this.enableSyncTabs = enableSyncTabs || false;
     // One database for every tab of the app
     this.sharedBetweenTabs = true;
-    this.expireCheckInterval = expireCheckInterval;
 
     this.dbPromise = this._initDB({ dbName, version, description });
     // Every use awaits it and sees the failure; this keeps a database that cannot open from also being reported
@@ -264,11 +242,13 @@ class IndexedDBAdapter extends StorageAdapter {
 
   /**
    * Loads all expiration timestamps.
-   * @private
+   * @protected
    * @returns {Promise<Object<string, number>>}
    */
   async _loadExpires() {
-    return this._withStore("readonly", async (store) => this._recordOf(await this._answerOf(store.get(this.expireKey))));
+    return this._withStore("readonly", async (store) =>
+      this._recordOf(await this._answerOf(store.get(this.expireKey))),
+    );
   }
 
   // ----------------------------------------------------------------------------------------------
@@ -352,64 +332,44 @@ class IndexedDBAdapter extends StorageAdapter {
   // ----------------------------------------------------------------------------------------------
 
   /**
-   * Stores a value — the value, its expiration and its revision in one transaction: the revision is read and raised
-   * there, so the revisions of a key rise in the order the writes of every tab are saved. Writes of a key are applied
-   * in the order they were called.
-   * @param {string} key - Key to store under
-   * @param {any} value - JSON; null or undefined removes the key.
-   * @param {number} [expire] - Expiration in milliseconds from now; 0 or less removes the key.
-   * @returns {Promise<boolean|null>} true when saved, false when it failed, null when the key was removed.
+   * Writes a stored text now — the value, its expiration and its revision in one transaction: the revision is read and
+   * raised there, so the revisions of a key rise in the order the writes of every tab are saved.
+   * @protected
+   * @param {string} key
+   * @param {string} stored
+   * @param {number|null} expiresAt
+   * @returns {Promise<import("../helpers/revisions.js").NextRevision>}
+   * @throws {Error} If the transaction fails.
    */
-  async set(key, value, expire) {
-    return this._inOrder(key, async () => {
-      try {
-        if (!key && !value) return false;
-        if (value === undefined || value === null || (typeof expire === "number" && expire <= 0)) {
-          await this._deleteNow(key);
-          return null;
-        }
-        // Encrypted before the transaction opens: it would close while waiting for the encryption
-        const stored = await this._encrypt(key, JSON.stringify(value));
-        if (stored === null) return false;
-        const expiresAt = typeof expire === "number" ? Date.now() + expire : null;
-        /** @type {import("./StorageAdapter.js").NextRevision} */
-        let next;
-
-        // Awaited together: when one request fails, the others' failure (the transaction aborts) has a handler too
-        await this._withStore("readwrite", (store) =>
-          Promise.all([
-            this._answerOf(store.put(stored, this._fullKey(key))),
-            this._changeExpires(store, (expires) => {
-              if (expiresAt !== null) {
-                expires[key] = expiresAt;
-                return true;
-              }
-              return this._removeEntry(expires, key);
-            }),
-            this._changeRecord(store, this.revisionKey, (revisions) => {
-              next = this._nextRevision(key, revisions[this._fullKey(key)]);
-              revisions[this._fullKey(key)] = next.revision;
-              return true;
-            }),
-          ]),
-        );
-        this._wrote(key, next);
-        if (this.enableSyncTabs) {
-          this.emitDataChange(key, undefined, "set", next.revision);
-        }
-        return true;
-      } catch (err) {
-        logError(`Error setting key '${key}':`, err);
-        return false;
-      }
-    });
+  async _writeNow(key, stored, expiresAt) {
+    /** @type {import("../helpers/revisions.js").NextRevision} */
+    let next;
+    // Awaited together: when one request fails, the others' failure (the transaction aborts) has a handler too
+    await this._withStore("readwrite", (store) =>
+      Promise.all([
+        this._answerOf(store.put(stored, this._fullKey(key))),
+        this._changeExpires(store, (expires) => {
+          if (expiresAt !== null) {
+            expires[key] = expiresAt;
+            return true;
+          }
+          return this._removeEntry(expires, key);
+        }),
+        this._changeRecord(store, this.revisionKey, (revisions) => {
+          next = this.revisions.next(key, revisions[this._fullKey(key)]);
+          revisions[this._fullKey(key)] = next.revision;
+          return true;
+        }),
+      ]),
+    );
+    return next;
   }
 
   // ----------------------------------------------------------------------------------------------
 
   /**
-   * Removes a key and its expiration in one transaction, and tells the other tabs.
-   * @private
+   * Removes a key, its expiration and its revision in one transaction, and tells the other tabs.
+   * @protected
    * @param {string} key
    * @returns {Promise<void>}
    * @throws {Error} If the transaction fails.
@@ -464,43 +424,17 @@ class IndexedDBAdapter extends StorageAdapter {
   // ----------------------------------------------------------------------------------------------
 
   /**
-   * Deletes a key — after the writes of the key asked before.
-   * @param {string} key - Key to delete
-   * @returns {Promise<void>}
+   * Every key of the object store, as stored — none when it cannot be read (logged).
+   * @protected
+   * @returns {Promise<string[]>}
    */
-  async delete(key) {
-    return this._inOrder(key, async () => {
-      try {
-        await this._deleteNow(key);
-      } catch (err) {
-        logError(`Error deleting key '${key}':`, err);
-      }
-    });
-  }
-
-  // ----------------------------------------------------------------------------------------------
-
-  /**
-   * The keys and values of the namespace whose key starts with a prefix.
-   * @param {string} [prefix=""] - Prefix of the keys (without the namespace).
-   * @returns {Promise<Array<{ key: string, value: any }>>}
-   */
-  async list(prefix = "") {
-    const results = [];
+  async _storedKeys() {
     try {
-      const storedKeys = await this._withStore("readonly", (store) => this._answerOf(store.getAllKeys()));
-      for (const stored of storedKeys) {
-        const key = this._ownKey(stored, prefix);
-        if (key === null) continue;
-        const value = await this.get(key);
-        if (value !== null) {
-          results.push({ key, value });
-        }
-      }
+      return await this._withStore("readonly", (store) => this._answerOf(store.getAllKeys()));
     } catch (err) {
       logError("Error listing keys:", err);
+      return [];
     }
-    return results;
   }
 
   // ----------------------------------------------------------------------------------------------
@@ -532,30 +466,9 @@ class IndexedDBAdapter extends StorageAdapter {
   // ----------------------------------------------------------------------------------------------
 
   /**
-   * Clears every key of the namespace, its metadata and its expirations — in one transaction, after the writes asked
-   * before (see StorageAdapter._exclusive).
-   * @returns {Promise<void>}
-   */
-  async clear() {
-    return this._exclusive(() => this._resetNow(true));
-  }
-
-  // ----------------------------------------------------------------------------------------------
-
-  /**
-   * Removes every key of the namespace and their expirations (the metadata stays), and tells the other tabs — in one
-   * transaction, after the writes asked before (see StorageAdapter._exclusive).
-   * @returns {Promise<void>}
-   */
-  async reset() {
-    return this._exclusive(() => this._resetNow(false));
-  }
-
-  // ----------------------------------------------------------------------------------------------
-
-  /**
-   * Removes every key of the namespace and the expirations record (and the metadata, when asked), now.
-   * @private
+   * Removes every key of the namespace and the expirations and revisions records (and the metadata, when asked) — in
+   * one transaction, now — and tells the other tabs.
+   * @protected
    * @param {boolean} withMeta - Remove the metadata too (clear).
    * @returns {Promise<void>}
    */
@@ -618,47 +531,15 @@ class IndexedDBAdapter extends StorageAdapter {
    */
   async deleteExpire(key) {
     try {
-      await this._withStore("readwrite", (store) => this._changeExpires(store, (expires) => this._removeEntry(expires, key)));
+      await this._withStore("readwrite", (store) =>
+        this._changeExpires(store, (expires) => this._removeEntry(expires, key)),
+      );
     } catch (err) {
       logError(`Error deleting expire for key '${key}':`, err);
     }
   }
 
   // ----------------------------------------------------------------------------------------------
-
-  /**
-   * Removes the entry of a key from a record (expirations, revisions).
-   * @private
-   * @param {Object<string, any>} record
-   * @param {string} key
-   * @returns {boolean} Whether the key had one.
-   */
-  _removeEntry(record, key) {
-    if (!(key in record)) {
-      return false;
-    }
-    delete record[key];
-    return true;
-  }
-
-  // ----------------------------------------------------------------------------------------------
-
-  /**
-   * Removes every expired key.
-   * @returns {Promise<void>}
-   */
-  async clearExpire() {
-    try {
-      const expires = await this._loadExpires();
-      for (const key of Object.keys(expires)) {
-        if (this._isExpired(expires[key])) {
-          await this._expire(key);
-        }
-      }
-    } catch (err) {
-      logError("Error clearing expired keys:", err);
-    }
-  }
 }
 
 // ----------------------------------------------------------------------------------------------

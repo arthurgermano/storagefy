@@ -6,6 +6,10 @@ const logError = (...args) => {
     console.error(...args);
   }
 };
+const logAndThrow = (message) => {
+  logError(message);
+  throw new Error(message);
+};
 const logWarn = (...args) => {
   if (globalThis.storagefyDebug && globalThis.storagefyDebugLevel >= 1) {
     args.unshift("Storagefy Warn:");
@@ -25,6 +29,7 @@ const logTrace = (...args) => {
   }
 };
 export {
+  logAndThrow,
   logError,
   logInfo,
   logTrace,

@@ -5,7 +5,7 @@ import { createStore } from "zustand/vanilla";
 import { STORAGE_NAMES, freshStorage, openStorage, closeAll, uniqueChannel, settle } from "../__fixtures__/storages.js";
 import CrossTabChannel from "../../src/helpers/CrossTabChannel.js";
 import IndexedDBAdapter from "../../src/adapters/IndexedDBAdapter.js";
-import { isNewerRevision } from "../../src/adapters/StorageAdapter.js";
+import { isNewerRevision } from "../../src/helpers/revisions.js";
 import PiniaAdapter from "../../src/stores/PiniaAdapter.js";
 import SvelteAdapter from "../../src/stores/SvelteAdapter.js";
 import ReactAdapter from "../../src/stores/ReactAdapter.js";
@@ -376,7 +376,7 @@ describe.each(STORAGE_NAMES)("%s — the order of the tabs' writes", (name) => {
     const { store } = await profileIn(storage);
     store.name = "new";
     await settle();
-    const written = storage._writtenRevision("profile");
+    const written = storage.revisions.written("profile");
 
     await tell(channel, await messageOf(storage, { name: "old", age: null }, { at: written.at - 1, by: "zzz" }));
 
@@ -423,7 +423,7 @@ describe.each(STORAGE_NAMES)("%s — the order of the tabs' writes", (name) => {
     store.name = "Bia";
     await settle();
 
-    expect(storage._writtenRevision("profile")).toEqual({ at: ahead.at + 1, by: storage.adapterId });
+    expect(storage.revisions.written("profile")).toEqual({ at: ahead.at + 1, by: storage.adapterId });
   });
 
   it("a write follows the newest revision heard, even before it is read", async () => {
@@ -437,7 +437,7 @@ describe.each(STORAGE_NAMES)("%s — the order of the tabs' writes", (name) => {
     store.age = 4;
     await settle();
 
-    expect(storage._writtenRevision("profile")).toEqual({ at: ahead.at + 1, by: storage.adapterId });
+    expect(storage.revisions.written("profile")).toEqual({ at: ahead.at + 1, by: storage.adapterId });
   });
 
   it("a change older than the state stored as the store started is not applied", async () => {
@@ -473,7 +473,7 @@ describe.each(["LocalStorageAdapter", "IndexedDBAdapter"])("%s — an older writ
     const { store } = await profileIn(storage);
     store.name = "Ana";
     await settle();
-    return { store, written: storage._writtenRevision("profile") };
+    return { store, written: storage.revisions.written("profile") };
   }
 
   /** Another tab's write reaching storage: told by the storage event (localStorage) or its message (IndexedDB) */
@@ -499,8 +499,8 @@ describe.each(["LocalStorageAdapter", "IndexedDBAdapter"])("%s — an older writ
     expect(store.name).toBe("Ana");
     expect(writes).toHaveBeenCalledTimes(1);
     expect(await openStorage(name).get("profile")).toEqual({ name: "Ana", age: null });
-    expect((await storage._read("profile")).revision).toEqual(storage._writtenRevision("profile"));
-    expect(isNewerRevision(storage._writtenRevision("profile"), written)).toBe(true);
+    expect((await storage._read("profile")).revision).toEqual(storage.revisions.written("profile"));
+    expect(isNewerRevision(storage.revisions.written("profile"), written)).toBe(true);
   });
 
   it("of the state the store holds is not written over: storage holds it already", async () => {
@@ -565,7 +565,7 @@ describe.each(["LocalStorageAdapter", "IndexedDBAdapter"])("%s — an older writ
     const { store } = await profileIn(storage, { onError });
     store.name = "Ana";
     await settle();
-    const written = storage._writtenRevision("profile");
+    const written = storage.revisions.written("profile");
     vi.spyOn(storage, "set").mockRejectedValue(new Error("disk gone"));
 
     await reaches(storage, channel, { name: null, age: 3 }, olderThan(written));
@@ -603,7 +603,7 @@ describe("LocalStorageAdapter — the message of an older write of another tab",
     }
     store.name = "Ana";
     await settle();
-    return { storage, channel, store, written: storage._writtenRevision("profile") };
+    return { storage, channel, store, written: storage.revisions.written("profile") };
   }
 
   it("unknown as the store wrote: its state is written again — that write may reach storage after the store's", async () => {
@@ -615,7 +615,7 @@ describe("LocalStorageAdapter — the message of an older write of another tab",
 
     expect(writes).toHaveBeenCalledTimes(1);
     expect(store.name).toBe("Ana");
-    expect(isNewerRevision(storage._writtenRevision("profile"), written)).toBe(true);
+    expect(isNewerRevision(storage.revisions.written("profile"), written)).toBe(true);
   });
 
   it("known as the store wrote: not written again — it was saved before", async () => {
@@ -669,7 +669,7 @@ describe("LocalStorageAdapter — the storage event", () => {
 
   it("is not followed by a store holding another tab's state, nor once the store is no longer kept", async () => {
     const { storage, channel, store, adapter, reads } = await keptAna();
-    const newer = { at: storage._writtenRevision("profile").at + 1, by: "another-tab" };
+    const newer = { at: storage.revisions.written("profile").at + 1, by: "another-tab" };
     await tell(channel, await messageOf(storage, { name: "Bia", age: null }, newer));
     expect(store.name).toBe("Bia");
     reads.mockClear();
@@ -707,7 +707,7 @@ describe("SessionStorageAdapter — a write of another tab made at the same time
     const { store } = await profileIn(storage);
     store.name = "Ana";
     await settle();
-    const written = storage._writtenRevision("profile");
+    const written = storage.revisions.written("profile");
     const writes = vi.spyOn(storage, "set");
 
     await tell(channel, await messageOf(storage, { name: null, age: 3 }, { at: written.at - 1, by: "zzz-tab" }));
@@ -741,7 +741,7 @@ describe("LocalStorageAdapter — three tabs changing the store at once", () => 
       expect(states[2]).toEqual(states[0]);
       expect(await openStorage("LocalStorageAdapter").get("profile")).toEqual(states[0]);
       // The tabs of the older writes applied the newest, and wrote nothing more
-      const newest = storages.reduce((a, b) => (isNewerRevision(b._writtenRevision("profile"), a._writtenRevision("profile")) ? b : a));
+      const newest = storages.reduce((a, b) => (isNewerRevision(b.revisions.written("profile"), a.revisions.written("profile")) ? b : a));
       storages.forEach((storage, i) => {
         if (storage !== newest) expect(writes[i]).toHaveBeenCalledTimes(1);
       });
@@ -761,7 +761,7 @@ describe.each(["LocalStorageAdapter", "SessionStorageAdapter"])("%s — the chan
     const { store } = await profileIn(storage);
     store.name = "Ana";
     await settle();
-    const written = storage._writtenRevision("profile");
+    const written = storage.revisions.written("profile");
     const changes = vi.fn();
     store.$subscribe(changes, { flush: "sync" });
 
@@ -777,7 +777,7 @@ describe.each(["LocalStorageAdapter", "SessionStorageAdapter"])("%s — the chan
     const channel = uniqueChannel();
     const storage = tab(name, channel);
     const { store } = await profileIn(storage);
-    const written = storage._writtenRevision("profile");
+    const written = storage.revisions.written("profile");
 
     await tell(channel, await messageOf(storage, { name: "Bia", age: null }, { at: written.at + 10, by: "x" }));
     await tell(channel, await messageOf(storage, { name: "Cid", age: null }, { at: written.at + 5, by: "x" }));
@@ -873,7 +873,7 @@ describe.each(["LocalStorageAdapter", "IndexedDBAdapter"])("%s — a tab shown a
     const { here, hereStorage } = await twoTabs();
     here.name = "new";
     await settle();
-    const written = hereStorage._writtenRevision("profile");
+    const written = hereStorage.revisions.written("profile");
     await writeStored(hereStorage, { name: "old", age: null }, { at: written.at - 1, by: "zzz" });
 
     showTab();
@@ -938,7 +938,7 @@ describe("Svelte — the state of another tab, kept with its revision", () => {
     const storage = tab("LocalStorageAdapter", channel);
     const cart = writable({ items: 1 });
     await new SvelteAdapter(storage).setInStorage(cart, "cart", { syncTabs: true });
-    const written = storage._writtenRevision("cart");
+    const written = storage.revisions.written("cart");
     const send = async (state, revision) =>
       tell(channel, { adapterId: "x", dbName: "testDB", key: "cart", value: JSON.stringify(state), origin: "set", revision });
 

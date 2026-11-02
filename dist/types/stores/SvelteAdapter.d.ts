@@ -1,6 +1,9 @@
 export default SvelteAdapter;
 /**
- * Svelte storage adapter: keeps a Svelte writable store's value in a storage adapter.
+ * Svelte storage adapter: keeps a Svelte writable store's value in a storage adapter — any value: an object, an
+ * array, a number, a string, a boolean. null or undefined removes the stored key (a store emptied on sign-out is not
+ * loaded back). The first write of setInStorage is made at once (unless storage already holds the value), and it
+ * throws when that write threw.
  * @class SvelteAdapter
  * @extends StoreAdapter
  * @example
@@ -12,17 +15,12 @@ export default SvelteAdapter;
  */
 declare class SvelteAdapter extends StoreAdapter {
     /**
-     * The store's value now.
-     * @private
+     * @protected
      * @param {any} store
-     * @returns {any}
+     * @param {string} key
+     * @param {any} value
+     * @returns {boolean}
      */
-    private _valueOf;
-    /**
-     * @private
-     * @param {any} store
-     * @throws {Error} If it is not a Svelte writable store.
-     */
-    private _checkStore;
+    protected _load(store: any, key: string, value: any): boolean;
 }
 import StoreAdapter from "./StoreAdapter.js";

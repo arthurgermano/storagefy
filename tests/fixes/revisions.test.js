@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { STORAGE_NAMES, freshStorage, openStorage, closeAll, uniqueChannel, settle, writeRaw } from "../__fixtures__/storages.js";
 import CrossTabChannel from "../../src/helpers/CrossTabChannel.js";
 import IndexedDBAdapter from "../../src/adapters/IndexedDBAdapter.js";
-import { isNewerRevision, isRevision } from "../../src/adapters/StorageAdapter.js";
+import { isNewerRevision, isRevision } from "../../src/helpers/revisions.js";
 
 // ------------------------------------------------------------------------------------------------
 // The revision of each write (1.4.0): kept beside the value — the value's format is the one of 1.3.0, which still
@@ -60,7 +60,7 @@ describe.each(STORAGE_NAMES)("%s — the revisions record", (name) => {
     expect(first.value).toEqual({ items: 1 });
     expect(first.revision).toEqual({ at: expect.any(Number), by: adapter.adapterId });
     expect(second.value).toEqual({ items: 2 });
-    expect(second.revision).toEqual(adapter._writtenRevision("cart"));
+    expect(second.revision).toEqual(adapter.revisions.written("cart"));
     expect(isNewerRevision(second.revision, first.revision)).toBe(true);
   });
 
@@ -80,7 +80,7 @@ describe.each(STORAGE_NAMES)("%s — the revisions record", (name) => {
 
     await adapter.set("cart", { items: 2 });
 
-    expect(adapter._writtenRevision("cart")).toEqual({ at: ahead + 1, by: adapter.adapterId });
+    expect(adapter.revisions.written("cart")).toEqual({ at: ahead + 1, by: adapter.adapterId });
   });
 
   it("tells the revision to the other tabs with the write", async () => {
@@ -96,7 +96,7 @@ describe.each(STORAGE_NAMES)("%s — the revisions record", (name) => {
     listener.close();
 
     expect(heard).toHaveLength(1);
-    expect(heard[0].revision).toEqual(adapter._writtenRevision("cart"));
+    expect(heard[0].revision).toEqual(adapter.revisions.written("cart"));
   });
 
   it("is removed with the key: delete, expiration, reset, clear", async () => {
@@ -165,22 +165,22 @@ describe.each(STORAGE_NAMES)("%s — the revisions record", (name) => {
     }
 
     expect((await adapter._read("cart")).revision).toBeUndefined();
-    const before = adapter._writtenRevision("cart");
+    const before = adapter.revisions.written("cart");
     await adapter.set("cart", { items: 2 });
-    expect(isNewerRevision(adapter._writtenRevision("cart"), before)).toBe(true);
+    expect(isNewerRevision(adapter.revisions.written("cart"), before)).toBe(true);
   });
 
   it("rise after the key is removed, even when the clock goes back", async () => {
     freshStorage(name);
     const adapter = openStorage(name);
     await adapter.set("cart", { items: 1 });
-    const first = adapter._writtenRevision("cart");
+    const first = adapter.revisions.written("cart");
     await adapter.delete("cart");
     vi.spyOn(Date, "now").mockReturnValue(first.at - 60_000);
 
     await adapter.set("cart", { items: 2 });
 
-    expect(adapter._writtenRevision("cart")).toEqual({ at: first.at + 1, by: adapter.adapterId });
+    expect(adapter.revisions.written("cart")).toEqual({ at: first.at + 1, by: adapter.adapterId });
   });
 
   it("a removed key leaves no revision to read", async () => {
@@ -215,7 +215,7 @@ describe.each(["LocalStorageAdapter", "SessionStorageAdapter"])("%s — a value 
     await adapter.set("cart", { items: 1 });
 
     expect(order).toEqual(["removeItem", "setItem"]);
-    expect(await adapter._read("cart")).toEqual({ value: { items: 1 }, revision: adapter._writtenRevision("cart") });
+    expect(await adapter._read("cart")).toEqual({ value: { items: 1 }, revision: adapter.revisions.written("cart") });
   });
 
   it("a different value is written without removing", async () => {
@@ -242,7 +242,7 @@ describe.each(["LocalStorageAdapter", "SessionStorageAdapter"])("%s — a broken
 
     expect(await adapter._read("cart")).toEqual({ value: { items: 1 }, revision: undefined });
     expect(await adapter.set("cart", { items: 2 })).toBe(true);
-    expect(await adapter._read("cart")).toEqual({ value: { items: 2 }, revision: adapter._writtenRevision("cart") });
+    expect(await adapter._read("cart")).toEqual({ value: { items: 2 }, revision: adapter.revisions.written("cart") });
   });
 });
 
@@ -251,12 +251,12 @@ describe("IndexedDBAdapter — a write whose transaction aborts", () => {
     freshStorage("IndexedDBAdapter");
     const adapter = openStorage("IndexedDBAdapter");
     await adapter.set("cart", { items: 1 });
-    const saved = adapter._writtenRevision("cart");
+    const saved = adapter.revisions.written("cart");
     vi.spyOn(adapter, "_changeExpires").mockRejectedValueOnce(new Error("request failed"));
 
     expect(await adapter.set("cart", { items: 2 })).toBe(false);
 
-    expect(adapter._writtenRevision("cart")).toBe(saved);
+    expect(adapter.revisions.written("cart")).toBe(saved);
     expect(await adapter._read("cart")).toEqual({ value: { items: 1 }, revision: saved });
   });
 });

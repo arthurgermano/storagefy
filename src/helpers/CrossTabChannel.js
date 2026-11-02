@@ -15,8 +15,8 @@ class CrossTabChannel {
   /**
    * Constructs a new CrossTabChannel instance using the specified channel name.
    *
-   * @param {string} [channelName='storagefy_channel'] - The name of the BroadcastChannel.
-   *                                                     Tabs sharing this name can communicate with each other.
+   * @param {string} [channelName] - The name of the BroadcastChannel: tabs sharing it talk to each other. Without one
+   *   (not a string), a name of its own is generated ("storagefy_channel_…"), shared with no other tab.
    */
   constructor(channelName) {
     // Initialize the BroadcastChannel with the given name.
@@ -61,7 +61,7 @@ class CrossTabChannel {
   }
 
   // ------------------------------------------------------------------------------------------------
-  
+
   /**
    * Sends a message to all tabs subscribed to the same channel.
    *

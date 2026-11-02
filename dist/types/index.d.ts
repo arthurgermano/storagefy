@@ -50,7 +50,8 @@ import SvelteAdapter from "./stores/SvelteAdapter.js";
  * @param {string} [config.description="Storagefy database"] Database description
  * @param {boolean} [config.forceRecreate=false] Replace the adapter kept with a new one: the old one is destroyed, and
  *   the store adapters kept over it stop keeping their stores (keep them again)
- * @param {boolean} [config.fresh=false] Force creation of new adapter and return a new instance - does not re-use existing adapter or update it
+ * @param {boolean} [config.fresh=false] Return a new adapter, kept by nobody — the adapter kept (if any) stays as it
+ *   is
  * @param {"indexedDB"|"localStorage"|"sessionStorage"} [config.adapter="indexedDB"] Storage adapter type
  * @returns {IndexedDBAdapter|LocalStorageAdapter|SessionStorageAdapter} Storage adapter instance
  * @throws {Error} If adapter initialization fails
@@ -93,7 +94,7 @@ export function getStorageAdapter(): IndexedDBAdapter | LocalStorageAdapter | Se
  *   methods of the adapter kept — or, with `fresh`, a new adapter (it has the same methods).
  * @throws {Error} If no storage adapter was given or started.
  */
-export function getPiniaAdapter({ adapter, adapterParams, forceRecreate, fresh }?: FrameworkAdapterOptions): {
+export function getPiniaAdapter(options?: FrameworkAdapterOptions): {
     setInStorage: PiniaAdapter["setInStorage"];
     getFromStorage: PiniaAdapter["getFromStorage"];
 };
@@ -103,14 +104,14 @@ export function getPiniaAdapter({ adapter, adapterParams, forceRecreate, fresh }
  * @returns {ReactAdapter} The adapter kept — or, with `fresh`, a new one.
  * @throws {Error} If no storage adapter was given or started.
  */
-export function getReactAdapter({ adapter, adapterParams, forceRecreate, fresh }?: FrameworkAdapterOptions): ReactAdapter;
+export function getReactAdapter(options?: FrameworkAdapterOptions): ReactAdapter;
 /**
  * Gets a Svelte store adapter.
  * @param {FrameworkAdapterOptions} [options]
  * @returns {SvelteAdapter} The adapter kept — or, with `fresh`, a new one.
  * @throws {Error} If no storage adapter was given or started.
  */
-export function getSvelteAdapter({ adapter, adapterParams, forceRecreate, fresh }?: FrameworkAdapterOptions): SvelteAdapter;
+export function getSvelteAdapter(options?: FrameworkAdapterOptions): SvelteAdapter;
 /**
  * Loads a Pinia store from storage, then keeps every change there — with the Pinia adapter kept (created over the
  * storage startStoragefy created, the first time).

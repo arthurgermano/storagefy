@@ -21,7 +21,7 @@ pnpm-debug.log*
 .idea/
 
 # test coverage report (npm run test:coverage)
-coverage/
+/coverage/
 
 # Playwright (npm run test:browser)
 test-results/

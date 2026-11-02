@@ -9,20 +9,11 @@ declare class IndexedDBAdapter extends StorageAdapter {
      *   object store (defaults to `${dbName}_store`).
      * @throws {Error} If IndexedDB is not available, or an encryption option is invalid.
      */
-    constructor({ dbName, storeName, version, encrypt, password, keyDerivation, expireCheckInterval, channelName, enableSyncTabs, description, }: import("./StorageAdapter.js").StorageAdapterOptions & {
+    constructor(options: import("./StorageAdapter.js").StorageAdapterOptions & {
         storeName?: string;
     });
     isReady: boolean;
-    dbName: string;
     storeName: string;
-    encrypt: boolean;
-    expireKey: string;
-    metaKey: string;
-    revisionKey: string;
-    prefix: string;
-    adapterId: string;
-    enableSyncTabs: boolean;
-    expireCheckInterval: number;
     dbPromise: Promise<IDBDatabase>;
     /**
      * Opens the database (creating the object store and the metadata the first time).
@@ -82,10 +73,12 @@ declare class IndexedDBAdapter extends StorageAdapter {
     private _recordOf;
     /**
      * Loads all expiration timestamps.
-     * @private
+     * @protected
      * @returns {Promise<Object<string, number>>}
      */
-    private _loadExpires;
+    protected _loadExpires(): Promise<{
+        [x: string]: number;
+    }>;
     /**
      * Changes the expirations in the same transaction as the request that needs it — never read in one transaction
      * and written in another, where two writes at once would lose one of the changes.
@@ -112,28 +105,5 @@ declare class IndexedDBAdapter extends StorageAdapter {
      * @returns {Promise<void>}
      */
     private _forgetRevision;
-    /**
-     * Removes a key and its expiration in one transaction, and tells the other tabs.
-     * @private
-     * @param {string} key
-     * @returns {Promise<void>}
-     * @throws {Error} If the transaction fails.
-     */
-    private _deleteNow;
-    /**
-     * Removes every key of the namespace and the expirations record (and the metadata, when asked), now.
-     * @private
-     * @param {boolean} withMeta - Remove the metadata too (clear).
-     * @returns {Promise<void>}
-     */
-    private _resetNow;
-    /**
-     * Removes the entry of a key from a record (expirations, revisions).
-     * @private
-     * @param {Object<string, any>} record
-     * @param {string} key
-     * @returns {boolean} Whether the key had one.
-     */
-    private _removeEntry;
 }
 import StorageAdapter from "./StorageAdapter.js";

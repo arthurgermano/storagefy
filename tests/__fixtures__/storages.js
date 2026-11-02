@@ -5,6 +5,7 @@ import LocalStorageAdapter from "../../src/adapters/LocalStorageAdapter.js";
 import SessionStorageAdapter from "../../src/adapters/SessionStorageAdapter.js";
 import IndexedDBAdapter from "../../src/adapters/IndexedDBAdapter.js";
 import * as cryptoHelper from "../../src/helpers/cryptoHelper.js";
+import { encryptData } from "./legacyFormat.js";
 
 // ------------------------------------------------------------------------------------------------
 // The three storage adapters, each over a storage of its own — the tests of a behavior run against all of them
@@ -101,5 +102,5 @@ export async function readRaw(adapter, key) {
  */
 export async function encryptedLike120(key, value, password) {
   const cKey = password ? await cryptoHelper.deriveKey(password, key) : await cryptoHelper.deriveKey(key);
-  return JSON.stringify(await cryptoHelper.encryptData(cKey, JSON.stringify(value), false));
+  return JSON.stringify(await encryptData(cKey, JSON.stringify(value), false));
 }

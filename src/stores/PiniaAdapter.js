@@ -1,6 +1,7 @@
-import StoreAdapter, { isPlainObject } from "./StoreAdapter.js";
+import StoreAdapter from "./StoreAdapter.js";
 import { reportFailure } from "../helpers/failureReport.js";
-import { logError } from "../helpers/loggerHelper.js";
+import { logAndThrow } from "../helpers/loggerHelper.js";
+import { isPlainObject, merged } from "../helpers/state.js";
 
 // ------------------------------------------------------------------------------------------------
 
@@ -10,7 +11,8 @@ const NOT_AN_OBJECT = "Storagefy: the stored state of a Pinia store must be an o
 // ------------------------------------------------------------------------------------------------
 
 /**
- * Pinia storage adapter: keeps a Pinia store's state in a storage adapter.
+ * Pinia storage adapter: keeps a Pinia store's state in a storage adapter. The first write of setInStorage is made at
+ * once (unless storage already holds the state), and it throws when that write threw.
  * @class PiniaAdapter
  * @extends StoreAdapter
  * @example
@@ -20,90 +22,73 @@ const NOT_AN_OBJECT = "Storagefy: the stored state of a Pinia store must be an o
  */
 class PiniaAdapter extends StoreAdapter {
   /**
-   * @param {import("../adapters/StorageAdapter.js").default} adapter - The storage adapter.
-   * @throws {Error} If no storage adapter is given.
-   */
-  constructor(adapter) {
-    super(adapter);
-  }
-
-  // ----------------------------------------------------------------------------------------------
-
-  /**
    * Validates that a Pinia store has the required methods.
-   * @private
+   * @protected
    * @param {any} store
    * @throws {Error} If it is not a Pinia store.
    */
   _checkStore(store) {
     if (!store || !store.$subscribe || !store.$patch) {
-      logError("Store provided is not defined");
-      throw new Error("Store provided is not defined");
+      logAndThrow("Store provided is not defined");
     }
   }
 
   // ----------------------------------------------------------------------------------------------
 
   /**
-   * Writes the store's state now (unless storage already holds it) and on every change after (see
-   * StoreAdapter._onChange).
-   * @param {any} store - The Pinia store.
-   * @param {string} key - Storage key.
-   * @param {import("./StoreAdapter.js").SetInStorageOptions} [options]
-   * @returns {Promise<boolean>} true once the state is written for the first time (or found stored).
-   * @throws {Error} If it is not a Pinia store, or the first write threw.
-   * @example
-   * await piniaAdapter.setInStorage(useUserStore(), "user-data", { ignoreKeys: ["password", "token"] });
+   * @protected
+   * @param {any} store
+   * @returns {object}
    */
-  async setInStorage(store, key, options = {}) {
-    this._checkStore(store);
-    const kept = this._keep(key, store, options);
-    await this._start(
-      kept,
-      () => store.$state,
-      (incoming) => {
-        if (!isPlainObject(incoming)) {
-          throw new Error(NOT_AN_OBJECT);
-        }
-        store.$state = this._merged(store.$state, incoming);
-      },
-    );
-    // Kept again, or no longer, while storage was read
-    if (this.stores[key] !== kept) {
-      return true;
-    }
-    kept.unsubscribe = store.$subscribe((mutation, state) => {
-      // A failed write is told through onError
-      this._onChange(kept, state)?.catch(() => {});
-    });
-    await this._firstWrite(kept, store.$state);
-    return true;
+  _currentOf(store) {
+    return store.$state;
   }
 
   // ----------------------------------------------------------------------------------------------
 
   /**
-   * Loads persisted state into a Pinia store.
-   * @param {any} store - The Pinia store.
-   * @param {string} key - Storage key.
-   * @param {import("./StoreAdapter.js").GetFromStorageOptions} [options]
-   * @returns {Promise<true|undefined>} true when a state was loaded; undefined when there was none.
-   * @throws {Error} If it is not a Pinia store.
+   * @protected
+   * @param {any} store
+   * @param {any} incoming
+   * @throws {Error} If it is not an object.
    */
-  async getFromStorage(store, key, options = {}) {
-    this._checkStore(store);
-    const storage = await this.adapter.get(key, { onError: options.onError });
-    if (storage === null) {
-      this._rememberLoaded(key, null);
-      return;
+  _apply(store, incoming) {
+    if (!isPlainObject(incoming)) {
+      throw new Error(NOT_AN_OBJECT);
     }
-    if (!isPlainObject(storage)) {
+    store.$state = merged(store.$state, incoming);
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * @protected
+   * @param {any} store
+   * @param {import("./KeptStore.js").default} kept
+   * @returns {import("./StoreAdapter.js").Subscription}
+   */
+  _subscribe(store, kept) {
+    const unsubscribe = store.$subscribe((mutation, state) => kept.changed(state));
+    return { unsubscribe, firstWrite: kept.firstWrite(store.$state) };
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * A stored state that is not an object is not loaded — told through onError.
+   * @protected
+   * @param {any} store
+   * @param {string} key
+   * @param {any} value
+   * @param {import("./StoreAdapter.js").GetFromStorageOptions} options
+   * @returns {boolean}
+   */
+  _load(store, key, value, options) {
+    if (!isPlainObject(value)) {
       reportFailure("read", key, options.onError, new Error(NOT_AN_OBJECT));
-      return;
+      return false;
     }
-    // Read from storage just now: a value of its own, shared with nothing
-    store.$patch(storage);
-    this._rememberLoaded(key, storage);
+    store.$patch(value);
     return true;
   }
 }

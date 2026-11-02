@@ -2,8 +2,12 @@ import * as cryptoHelper from "../helpers/cryptoHelper.js";
 import CrossTabChannel from "../helpers/CrossTabChannel.js";
 import { reportFailure } from "../helpers/failureReport.js";
 import { logInfo, logWarn, logError } from "../helpers/loggerHelper.js";
+import { generateSimpleId } from "misc-helpers";
+import { RevisionBook, isRevision } from "../helpers/revisions.js";
 
 // -------------------------------------------------------------------------------------------------
+
+/** @typedef {import("../helpers/revisions.js").Revision} Revision */
 
 /**
  * Options shared by every storage adapter.
@@ -43,55 +47,11 @@ import { logInfo, logWarn, logError } from "../helpers/loggerHelper.js";
  */
 
 /**
- * The order of a write among every write of a key, in every tab of the app: a store applies another tab's state only
- * when it is newer than the one it holds — an older message, or a stale state written late, never undoes a newer one.
- * @typedef {Object} Revision
- * @property {number} at - When it was written (ms since the epoch) — or, when the clock gives no later time than the
- *   newest revision of the key known, one more than it: the revisions of a key always rise.
- * @property {string} by - The adapter that wrote it: of two writes at the same `at`, the one with the greater `by` is
- *   the newer, in every tab alike.
- */
-
-/**
- * The revision of a new write, and the newest revision of the key known when it was made.
- * @typedef {Object} NextRevision
- * @property {Revision} revision
- * @property {Revision} [basis] - None when no revision of the key was known (stored or told).
- */
-
-/**
  * What is stored under a key, with the order of its write.
  * @typedef {Object} StoredRead
  * @property {any} value - The value, or null when absent, expired or unreadable.
  * @property {Revision} [revision] - The revision of the value; none for a value written before 1.4.0, or none stored.
  */
-
-// -------------------------------------------------------------------------------------------------
-
-/**
- * Whether a value is a revision (see Revision) — a record or a message may hold anything.
- * @param {unknown} value
- * @returns {value is Revision}
- */
-export function isRevision(value) {
-  return Number.isFinite(value?.at) && typeof value.by === "string";
-}
-
-// -------------------------------------------------------------------------------------------------
-
-/**
- * Whether a revision is newer than another: a later `at`, or the same `at` and a greater `by`. Nothing is older than
- * any revision.
- * @param {Revision} revision
- * @param {Revision} [than]
- * @returns {boolean}
- */
-export function isNewerRevision(revision, than) {
-  if (!than) {
-    return true;
-  }
-  return revision.at > than.at || (revision.at === than.at && revision.by > than.by);
-}
 
 // -------------------------------------------------------------------------------------------------
 
@@ -102,9 +62,34 @@ export function isNewerRevision(revision, than) {
  */
 class StorageAdapter {
   /**
-   * @param {string|false} [channelName] - Name of the channel between tabs; without it, nothing is told to other tabs.
+   * The namespace, the encryption and the channel between tabs — the options every adapter shares.
+   * @param {StorageAdapterOptions} [options]
+   * @throws {Error} If an encryption option is invalid — checked before the channel opens: none is left behind.
    */
-  constructor(channelName) {
+  constructor({
+    dbName,
+    encrypt = false,
+    password = null,
+    keyDerivation,
+    expireCheckInterval = 1000,
+    channelName = false,
+    enableSyncTabs = false,
+  } = {}) {
+    this._setEncryption(password, keyDerivation);
+    this.dbName = dbName;
+    this.encrypt = encrypt;
+    // The keys of the app start with the prefix; the namespace's own records are never listed (see _isRecord)
+    this.prefix = `${dbName}__`;
+    this.metaKey = `STRGF_${dbName}__meta`;
+    this.expireKey = `STRGF_${dbName}__expires`;
+    this.revisionKey = `STRGF_${dbName}__revisions`;
+    this.adapterId = generateSimpleId(dbName);
+    /** What this adapter knows of the revisions of the writes (see helpers/revisions.js) */
+    this.revisions = new RevisionBook(this.adapterId);
+    this.expireCheckInterval = expireCheckInterval;
+    this.enableSyncTabs = enableSyncTabs || false;
+    /** Whether the tabs of the app share the storage (IndexedDB, localStorage): a tab can read what another wrote */
+    this.sharedBetweenTabs = false;
     // The AES key of each storage key and derivation, derived once (PBKDF2 is slow on purpose). Kept as the promise,
     // so concurrent reads and writes share one derivation.
     this._derivedKeys = new Map();
@@ -113,17 +98,6 @@ class StorageAdapter {
     // The operation on every key in progress (reset, clear): it runs after the writes asked before it, and the
     // writes asked after it wait for it
     this._barrier = Promise.resolve();
-    // The newest revision of each key this adapter knows — written here or told by another tab: a new write is always
-    // newer than all of them, even after the key was removed (and its stored revision with it)
-    /** @type {Map<string, Revision>} */
-    this._revisions = new Map();
-    // The last write of each key this adapter saved: its revision — what a store holds after writing — and the newest
-    // revision known when it was written
-    /** @type {Map<string, NextRevision>} */
-    this._written = new Map();
-    /** Whether the tabs of the app share the storage (IndexedDB, localStorage): a tab can read what another wrote */
-    this.sharedBetweenTabs = false;
-    this.keyDerivation = cryptoHelper.DEFAULT_KEY_DERIVATION;
     /** @type {ReturnType<typeof setInterval> | null} The expiry watcher (the browser's and Node's timers differ) */
     this._expireTimer = null;
 
@@ -142,7 +116,6 @@ class StorageAdapter {
 
   /**
    * Retrieve the value for a given key — after the writes of the key asked before.
-   * @abstract
    * @param {string} key - The storage key.
    * @param {ReadOptions} [options]
    * @returns {Promise<any>} The value, or null when absent, expired or unreadable.
@@ -151,6 +124,146 @@ class StorageAdapter {
     return (await this._read(key, options)).value;
   }
 
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * Stores a value under a key, with its expiration and revision. Writes of a key are applied in the order they were
+   * called (see _inOrder).
+   * @param {string} key - The storage key.
+   * @param {any} value - The value to store (JSON); null or undefined removes the key.
+   * @param {number} [expire] - Expiration in milliseconds from now; 0 or less removes the key.
+   * @returns {Promise<boolean|null>} true when stored, false when it failed, null when the key was removed.
+   */
+  async set(key, value, expire) {
+    return this._inOrder(key, async () => {
+      try {
+        if (!key && !value) return false;
+        if (value === undefined || value === null || (typeof expire === "number" && expire <= 0)) {
+          await this._deleteNow(key);
+          return null;
+        }
+        // Encrypted before the write begins (an IndexedDB transaction would close while waiting for it)
+        const stored = await this._encrypt(key, JSON.stringify(value));
+        if (stored === null) return false;
+        const expiresAt = typeof expire === "number" ? Date.now() + expire : null;
+        const next = await this._writeNow(key, stored, expiresAt);
+        this.revisions.wrote(key, next);
+        if (this.enableSyncTabs) {
+          this.emitDataChange(key, this._messageValue(stored), "set", next.revision);
+        }
+        return true;
+      } catch (err) {
+        // e.g. the storage is full (QuotaExceededError), or the transaction aborted
+        logError(`Error setting key '${key}':`, err);
+        return false;
+      }
+    });
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * Deletes a key, its expiration and its revision — after the writes of the key asked before.
+   * @param {string} key - The storage key to remove.
+   * @returns {Promise<void>}
+   */
+  async delete(key) {
+    return this._inOrder(key, async () => {
+      try {
+        await this._deleteNow(key);
+      } catch (err) {
+        logError(`Error deleting key '${key}':`, err);
+      }
+    });
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * The keys and values of the namespace whose key starts with a prefix.
+   * @param {string} [prefix=""] - Prefix of the keys (without the namespace).
+   * @returns {Promise<Array<{ key: string, value: any }>>}
+   */
+  async list(prefix = "") {
+    const keys = [];
+    for (const stored of await this._storedKeys()) {
+      const key = this._ownKey(stored, prefix);
+      if (key !== null) {
+        keys.push(key);
+      }
+    }
+    const results = [];
+    for (const key of keys) {
+      const value = await this.get(key);
+      if (value !== null) {
+        results.push({ key, value });
+      }
+    }
+    return results;
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * Removes every key of the namespace, their expirations and revisions (the metadata stays), and tells the other
+   * tabs — after the writes asked before (see _exclusive).
+   * @returns {Promise<void>}
+   */
+  async reset() {
+    return this._exclusive(() => this._resetNow(false));
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * Removes every key of the namespace and its records, the metadata too — after the writes asked before (see
+   * _exclusive).
+   * @returns {Promise<void>}
+   */
+  async clear() {
+    return this._exclusive(() => this._resetNow(true));
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * Removes every expired key (see _expire: each only if it still is when its turn comes).
+   * @returns {Promise<void>}
+   */
+  async clearExpire() {
+    try {
+      const expires = await this._loadExpires();
+      for (const key of Object.keys(expires)) {
+        if (this._isExpired(expires[key])) {
+          await this._expire(key);
+        }
+      }
+    } catch (err) {
+      logError("Error clearing expired keys:", err);
+    }
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * The state a change of another tab tells, with its revision — for the store adapters (see StoreAdapter). A message
+   * that carries the stored value (localStorage, sessionStorage) is decrypted; one that carries none (IndexedDB: a
+   * write is told once its transaction is saved, so a read after the message sees it) is read from storage.
+   * @protected
+   * @param {DataChange} change
+   * @param {ReadOptions} [options]
+   * @returns {Promise<StoredRead & { fromStorage: boolean }>} fromStorage: read from storage, not from the message.
+   * @throws {Error} If the value in the message cannot be read (it does not decrypt, it is not JSON).
+   */
+  async _readChange(change, options) {
+    if (change.value === undefined) {
+      return { ...(await this._read(change.key, options)), fromStorage: true };
+    }
+    return { value: await this._decrypt(change.key, change.value), revision: change.revision, fromStorage: false };
+  }
+
+  // ----------------------------------------------------------------------------------------------
+  // What each adapter does with its storage
   // ----------------------------------------------------------------------------------------------
 
   /**
@@ -168,71 +281,83 @@ class StorageAdapter {
   // ----------------------------------------------------------------------------------------------
 
   /**
-   * Store a value under a key. Writes of the same key are applied in the order they were called.
+   * Writes a stored text now, with its expiration and its revision — the revision read and raised with the write, so
+   * no write of this storage lands between (see RevisionBook.next).
    * @abstract
+   * @protected
    * @param {string} key - The storage key.
-   * @param {any} value - The value to store (JSON); null or undefined removes the key.
-   * @param {number} [expire] - Expiration in milliseconds from now.
-   * @returns {Promise<boolean|null>} true when stored, false when it failed, null when the key was removed.
+   * @param {string} stored - What to store (encrypted when the adapter encrypts).
+   * @param {number|null} expiresAt - When it expires (ms since the epoch); null: never.
+   * @returns {Promise<import("../helpers/revisions.js").NextRevision>} The revision of the write.
+   * @throws {Error} If the storage refused it.
    */
-  async set(key, value, expire) {
+  async _writeNow(key, stored, expiresAt) {
     throw new Error("Not implemented");
   }
 
   // ----------------------------------------------------------------------------------------------
 
   /**
-   * Delete a specific key.
+   * What the message of a write carries of its value: the stored text, or nothing when the other tabs read storage
+   * once told (IndexedDB).
+   * @protected
+   * @param {string} stored
+   * @returns {string|undefined}
+   */
+  _messageValue(stored) {
+    return undefined;
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * Removes a key, its expiration and its revision now, and tells the other tabs.
    * @abstract
-   * @param {string} key - The storage key to remove.
+   * @protected
+   * @param {string} key - The storage key.
+   * @returns {Promise<void>}
+   * @throws {Error} If the storage failed.
+   */
+  async _deleteNow(key) {
+    throw new Error("Not implemented");
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * Every key of the storage, as stored — the app's, the namespace's records, other namespaces' (see _ownKey).
+   * @abstract
+   * @protected
+   * @returns {Promise<string[]>}
+   */
+  async _storedKeys() {
+    throw new Error("Not implemented");
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * Removes every key of the namespace and the expirations and revisions records now (the metadata too, when asked),
+   * and tells the other tabs. Never rejects: a failure is logged.
+   * @abstract
+   * @protected
+   * @param {boolean} withMeta - Remove the metadata too (clear).
    * @returns {Promise<void>}
    */
-  async delete(key) {
+  async _resetNow(withMeta) {
     throw new Error("Not implemented");
   }
 
   // ----------------------------------------------------------------------------------------------
 
   /**
-   * The keys and values whose key starts with a prefix.
+   * The expiration timestamps of the namespace, by key.
    * @abstract
-   * @param {string} [prefix=""] - Prefix of the keys (without the namespace).
-   * @returns {Promise<Array<{ key: string, value: any }>>}
+   * @protected
+   * @returns {Promise<Object<string, number>>|Object<string, number>} A promise with IndexedDB; the record itself with
+   *   localStorage and sessionStorage.
    */
-  async list(prefix = "") {
-    throw new Error("Not implemented");
-  }
-
-  // ----------------------------------------------------------------------------------------------
-
-  /**
-   * Remove every key of the namespace (the metadata stays).
-   * @abstract
-   * @returns {Promise<void>}
-   */
-  async reset() {
-    throw new Error("Not implemented");
-  }
-
-  // ----------------------------------------------------------------------------------------------
-
-  /**
-   * Remove every key of the namespace and its metadata.
-   * @abstract
-   * @returns {Promise<void>}
-   */
-  async clear() {
-    throw new Error("Not implemented");
-  }
-
-  // ----------------------------------------------------------------------------------------------
-
-  /**
-   * Remove all expired keys.
-   * @abstract
-   * @returns {Promise<void>}
-   */
-  async clearExpire() {
+  async _loadExpires() {
     throw new Error("Not implemented");
   }
 
@@ -345,73 +470,6 @@ class StorageAdapter {
    */
   async _afterWrites(key) {
     await Promise.allSettled([this._pendingWrites.get(key), this._barrier]);
-  }
-
-  // ----------------------------------------------------------------------------------------------
-
-  /**
-   * Knows a revision of a key — written here or told by another tab — when it is newer than the one known.
-   * @protected
-   * @param {string} key - The storage key.
-   * @param {unknown} revision - Anything that is not a revision is left out.
-   */
-  _noteRevision(key, revision) {
-    if (isRevision(revision) && isNewerRevision(revision, this._revisions.get(key))) {
-      this._revisions.set(key, revision);
-    }
-  }
-
-  // ----------------------------------------------------------------------------------------------
-
-  /**
-   * The revision of a new write of a key: newer than the one stored and than every one known.
-   * @protected
-   * @param {string} key - The storage key.
-   * @param {unknown} stored - The revision stored with the key now (read with the write, so no write lands between).
-   * @returns {NextRevision}
-   */
-  _nextRevision(key, stored) {
-    const known = this._revisions.get(key);
-    const basis = isRevision(stored) && isNewerRevision(stored, known) ? stored : known;
-    return { revision: { at: Math.max(Date.now(), (basis?.at ?? 0) + 1), by: this.adapterId }, basis };
-  }
-
-  // ----------------------------------------------------------------------------------------------
-
-  /**
-   * Keeps the revision of a write saved here, and what it was written after.
-   * @protected
-   * @param {string} key - The storage key.
-   * @param {NextRevision} next - As _nextRevision gave it.
-   */
-  _wrote(key, next) {
-    this._written.set(key, next);
-    this._noteRevision(key, next.revision);
-  }
-
-  // ----------------------------------------------------------------------------------------------
-
-  /**
-   * The revision of the last write of a key saved by this adapter.
-   * @protected
-   * @param {string} key - The storage key.
-   * @returns {Revision|undefined}
-   */
-  _writtenRevision(key) {
-    return this._written.get(key)?.revision;
-  }
-
-  // ----------------------------------------------------------------------------------------------
-
-  /**
-   * The newest revision of a key known when this adapter saved its last write of it — none when it knew none. A write
-   * of another tab newer than it was not known: made at the same time, it may have landed after this one.
-   * @protected
-   * @param {string} key - The storage key.
-   * @returns {Revision|undefined}
-   */
-  _writtenAfter(key) {
-    return this._written.get(key)?.basis;
   }
 
   // ----------------------------------------------------------------------------------------------
@@ -581,6 +639,23 @@ class StorageAdapter {
   _revisionIn(revisions, key) {
     const revision = revisions[this._fullKey(key)];
     return isRevision(revision) ? revision : undefined;
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * Removes the entry of a key from a record of the namespace (expirations, revisions).
+   * @protected
+   * @param {Object<string, any>} record
+   * @param {string} key
+   * @returns {boolean} Whether the key had one.
+   */
+  _removeEntry(record, key) {
+    if (!(key in record)) {
+      return false;
+    }
+    delete record[key];
+    return true;
   }
 
   // ----------------------------------------------------------------------------------------------

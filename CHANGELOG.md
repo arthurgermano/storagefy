@@ -53,6 +53,15 @@
   `clear`); it is never listed. The values are stored as in 1.3.0: **1.3.0 reads what 1.4.0 writes, and 1.4.0 reads
   what 1.3.0 wrote** (a value without revision is older than any write). A message of a 1.3.0 tab (no revision) is
   applied as then: when its state differs.
+- An invalid `password` or `keyDerivation` is refused before the channel between tabs opens: none is left open.
+
+### Internal
+
+- The code is divided by what each part does — nothing an app uses changes: the revisions (`helpers/revisions.js`),
+  the state of a store (`helpers/state.js`), each store kept (`KeptStore`) and the following of the other tabs
+  (`TabFollower`) have files of their own; the storage adapters share `set`, `delete`, `list`, `reset`, `clear` and
+  `clearExpire`, and the store adapters `setInStorage` and `getFromStorage` — each adds only what its storage or its
+  library does.
 
 ## 1.3.0
 

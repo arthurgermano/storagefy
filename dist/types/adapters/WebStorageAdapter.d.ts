@@ -12,7 +12,8 @@ export type WebStorageKind = {
      */
     label: string;
     /**
-     * - Whether the tabs of the app share it (localStorage) or each has its own (sessionStorage).
+     * - Whether the tabs of the app share it (localStorage) or each has its own
+     * (sessionStorage).
      */
     shared: boolean;
 };
@@ -21,7 +22,8 @@ export type WebStorageKind = {
  * @typedef {Object} WebStorageKind
  * @property {"localStorage"|"sessionStorage"} storageName - The global it reads and writes.
  * @property {string} label - Its name in messages.
- * @property {boolean} shared - Whether the tabs of the app share it (localStorage) or each has its own (sessionStorage).
+ * @property {boolean} shared - Whether the tabs of the app share it (localStorage) or each has its own
+ *   (sessionStorage).
  */
 /**
  * @class WebStorageAdapter
@@ -35,17 +37,8 @@ declare class WebStorageAdapter extends StorageAdapter {
      * @param {WebStorageKind} kind
      * @throws {Error} If the storage is not available, or an encryption option is invalid.
      */
-    constructor({ dbName, version, encrypt, password, keyDerivation, expireCheckInterval, description, channelName, enableSyncTabs, }: import("./StorageAdapter.js").StorageAdapterOptions, kind: WebStorageKind);
+    constructor(options: import("./StorageAdapter.js").StorageAdapterOptions, kind: WebStorageKind);
     kind: WebStorageKind;
-    dbName: string;
-    encrypt: boolean;
-    expireKey: string;
-    metaKey: string;
-    revisionKey: string;
-    prefix: string;
-    adapterId: string;
-    expireCheckInterval: number;
-    enableSyncTabs: boolean;
     /**
      * The storage, looked up on each use.
      * @private
@@ -58,45 +51,32 @@ declare class WebStorageAdapter extends StorageAdapter {
      */
     private _initMeta;
     /**
-     * The expiration timestamps of the namespace.
+     * A record of the namespace (expirations, revisions) — empty when there is none, or it is not JSON (logged).
      * @private
+     * @param {string} recordKey
+     * @returns {Object<string, any>}
+     */
+    private _loadRecord;
+    /**
+     * Removes the entry of a key from a record of the namespace — written only when the key had one.
+     * @private
+     * @param {string} recordKey
+     * @param {string} key - The key of the entry (expirations: the storage key; revisions: as stored).
+     */
+    private _forgetEntry;
+    /**
+     * The expiration timestamps of the namespace.
+     * @protected
      * @returns {Object<string, number>}
      */
-    private _loadExpires;
+    protected _loadExpires(): {
+        [x: string]: number;
+    };
     /**
      * Writes the expiration timestamps.
      * @private
      * @param {Object<string, number>} expires
      */
     private _saveExpires;
-    /**
-     * Forgets the expiration of a key — written only when the key had one.
-     * @private
-     * @param {string} key
-     */
-    private _forgetExpire;
-    /**
-     * The revisions of the namespace (see StorageAdapter._revisionIn).
-     * @private
-     * @returns {Object<string, unknown>}
-     */
-    private _loadRevisions;
-    /**
-     * Forgets the revision of a key — written only when the key had one.
-     * @private
-     * @param {string} key
-     */
-    private _forgetRevision;
-    /**
-     * Removes a key and its expiration, and tells the other tabs.
-     * @private
-     * @param {string} key
-     */
-    private _deleteNow;
-    /**
-     * Removes every key of the namespace and the expirations record, now.
-     * @private
-     */
-    private _resetNow;
 }
 import StorageAdapter from "./StorageAdapter.js";
