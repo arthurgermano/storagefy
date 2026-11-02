@@ -18,6 +18,7 @@ declare class IndexedDBAdapter extends StorageAdapter {
     encrypt: boolean;
     expireKey: string;
     metaKey: string;
+    revisionKey: string;
     prefix: string;
     adapterId: string;
     enableSyncTabs: boolean;
@@ -73,12 +74,12 @@ declare class IndexedDBAdapter extends StorageAdapter {
      */
     private _answerOf;
     /**
-     * The expiration timestamps as stored.
+     * A record of the namespace (expirations, revisions) as stored.
      * @private
      * @param {string|undefined} raw
-     * @returns {Object<string, number>}
+     * @returns {Object<string, any>}
      */
-    private _expiresOf;
+    private _recordOf;
     /**
      * Loads all expiration timestamps.
      * @private
@@ -95,6 +96,23 @@ declare class IndexedDBAdapter extends StorageAdapter {
      */
     private _changeExpires;
     /**
+     * Changes a record of the namespace (expirations, revisions) in the transaction of the request that needs it.
+     * @private
+     * @param {IDBObjectStore} store - The store of the running transaction.
+     * @param {string} recordKey
+     * @param {(record: Object<string, any>) => boolean} change - Changes the record; true when something changed.
+     * @returns {Promise<void>}
+     */
+    private _changeRecord;
+    /**
+     * Removes the revision of a key, in the transaction that removes the key.
+     * @private
+     * @param {IDBObjectStore} store - The store of the running transaction.
+     * @param {string} key
+     * @returns {Promise<void>}
+     */
+    private _forgetRevision;
+    /**
      * Removes a key and its expiration in one transaction, and tells the other tabs.
      * @private
      * @param {string} key
@@ -110,12 +128,12 @@ declare class IndexedDBAdapter extends StorageAdapter {
      */
     private _resetNow;
     /**
-     * Removes the expiration of a key from the map.
+     * Removes the entry of a key from a record (expirations, revisions).
      * @private
-     * @param {Object<string, number>} expires
+     * @param {Object<string, any>} record
      * @param {string} key
      * @returns {boolean} Whether the key had one.
      */
-    private _removeExpire;
+    private _removeEntry;
 }
 import StorageAdapter from "./StorageAdapter.js";

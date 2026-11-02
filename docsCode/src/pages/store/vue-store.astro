@@ -163,7 +163,8 @@ ignoreKeys: [
             <code>timeout</code>: <strong>expiration</strong> of the stored state, in milliseconds
             <p class="strf-option-desc">
               Counted again after each write. It is not a time limit of the operation: after it, the stored state is
-              gone (the store keeps what it holds in memory). If not set, the state is kept until removed.
+              gone (the store keeps what it holds in memory). If not set, the state is kept until removed. A change of
+              an <code>ignoreKeys</code> key alone writes nothing, so it does not renew it.
             </p>
             <pre
               class="strf-code-block">
@@ -181,7 +182,11 @@ timeout: 300000   // expires after 5 minutes
             <p class="strf-option-desc">
               When <code>true</code>, changes made in one browser tab will be
               reflected in all others in real time. Requires <code>channelName</code> and <code>enableSyncTabs: true</code> on the storage adapter — without
-              both, nothing is synced and nothing warns you.
+              both, nothing is synced and nothing warns you. Only a state newer than the store's is applied —
+              every write has a revision, so an older state never undoes a newer change; two tabs changing the store
+              at once end with the same state, the one stored (with localStorage, the tab of the newer change
+              writes it again). With IndexedDB and localStorage, a tab shown again
+              reads storage again.
             </p>
             <pre
               class="strf-code-block">

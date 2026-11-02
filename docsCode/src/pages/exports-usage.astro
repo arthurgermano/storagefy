@@ -304,7 +304,8 @@ await setSvelteStorage(myStore, "theme", &#123;
           <ul>
             <li>
               <code>timeout</code>: <strong>expiration</strong> of the stored state, in milliseconds after each
-              write — not a time limit of the operation: after it, the stored state is gone
+              write — not a time limit of the operation: after it, the stored state is gone. A change of an
+              <code>ignoreKeys</code> key alone writes nothing, so it does not renew it
             </li>
             <li>
               <code>ignoreKeys</code>: Array of keys to exclude from persistence.
@@ -313,7 +314,9 @@ await setSvelteStorage(myStore, "theme", &#123;
             </li>
             <li>
               <code>syncTabs</code>: If <code>true</code>, this store applies the changes of the other tabs — the
-              storage adapter needs <code>channelName</code> and <code>enableSyncTabs</code>
+              storage adapter needs <code>channelName</code> and <code>enableSyncTabs</code>. Only a state newer
+              than the store's is applied (every write has a revision); with IndexedDB and localStorage, a tab shown
+              again reads storage again
             </li>
             <li>
               <code>onError</code>: called with an <code>Error</code> when the state could not be saved (storage

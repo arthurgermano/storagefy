@@ -51,9 +51,12 @@ class IndexedDBAdapter extends StorageAdapter {
     this._setEncryption(password, keyDerivation);
     this.expireKey = `STRGF_${dbName}__expires`;
     this.metaKey = `STRGF_${dbName}__meta`;
+    this.revisionKey = `STRGF_${dbName}__revisions`;
     this.prefix = `${dbName}__`;
     this.adapterId = generateSimpleId(dbName);
     this.enableSyncTabs = enableSyncTabs || false;
+    // One database for every tab of the app
+    this.sharedBetweenTabs = true;
     this.expireCheckInterval = expireCheckInterval;
 
     this.dbPromise = this._initDB({ dbName, version, description });
@@ -248,12 +251,12 @@ class IndexedDBAdapter extends StorageAdapter {
   // ----------------------------------------------------------------------------------------------
 
   /**
-   * The expiration timestamps as stored.
+   * A record of the namespace (expirations, revisions) as stored.
    * @private
    * @param {string|undefined} raw
-   * @returns {Object<string, number>}
+   * @returns {Object<string, any>}
    */
-  _expiresOf(raw) {
+  _recordOf(raw) {
     return raw ? JSON.parse(raw) : {};
   }
 
@@ -265,7 +268,7 @@ class IndexedDBAdapter extends StorageAdapter {
    * @returns {Promise<Object<string, number>>}
    */
   async _loadExpires() {
-    return this._withStore("readonly", async (store) => this._expiresOf(await this._answerOf(store.get(this.expireKey))));
+    return this._withStore("readonly", async (store) => this._recordOf(await this._answerOf(store.get(this.expireKey))));
   }
 
   // ----------------------------------------------------------------------------------------------
@@ -279,48 +282,79 @@ class IndexedDBAdapter extends StorageAdapter {
    * @returns {Promise<void>}
    */
   async _changeExpires(store, change) {
-    const expires = this._expiresOf(await this._answerOf(store.get(this.expireKey)));
-    if (change(expires)) {
-      await this._answerOf(store.put(JSON.stringify(expires), this.expireKey));
+    await this._changeRecord(store, this.expireKey, change);
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * Changes a record of the namespace (expirations, revisions) in the transaction of the request that needs it.
+   * @private
+   * @param {IDBObjectStore} store - The store of the running transaction.
+   * @param {string} recordKey
+   * @param {(record: Object<string, any>) => boolean} change - Changes the record; true when something changed.
+   * @returns {Promise<void>}
+   */
+  async _changeRecord(store, recordKey, change) {
+    const record = this._recordOf(await this._answerOf(store.get(recordKey)));
+    if (change(record)) {
+      await this._answerOf(store.put(JSON.stringify(record), recordKey));
     }
   }
 
   // ----------------------------------------------------------------------------------------------
 
   /**
-   * Retrieves a value from storage by key — after the writes of the key asked before.
+   * Removes the revision of a key, in the transaction that removes the key.
+   * @private
+   * @param {IDBObjectStore} store - The store of the running transaction.
+   * @param {string} key
+   * @returns {Promise<void>}
+   */
+  _forgetRevision(store, key) {
+    return this._changeRecord(store, this.revisionKey, (revisions) => this._removeEntry(revisions, this._fullKey(key)));
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * What is stored under a key, with its revision — the value, its expiration and its revision read in one
+   * transaction, after the writes of the key asked before.
+   * @protected
    * @param {string} key - Key to retrieve
    * @param {import("./StorageAdapter.js").ReadOptions} [options]
-   * @returns {Promise<any>} The stored value, or null if absent, expired or unreadable.
+   * @returns {Promise<import("./StorageAdapter.js").StoredRead>} The value is null if absent, expired or unreadable.
    */
-  async get(key, options = {}) {
+  async _read(key, options = {}) {
     await this._afterWrites(key);
     try {
       const fullKey = this._fullKey(key);
-      const { raw, expires } = await this._withStore("readonly", async (store) => {
-        const [value, expiresRaw] = await Promise.all([
+      const { raw, expires, revisions } = await this._withStore("readonly", async (store) => {
+        const [value, expiresRaw, revisionsRaw] = await Promise.all([
           this._answerOf(store.get(fullKey)),
           this._answerOf(store.get(this.expireKey)),
+          this._answerOf(store.get(this.revisionKey)),
         ]);
-        return { raw: value, expires: this._expiresOf(expiresRaw)[key] };
+        return { raw: value, expires: this._recordOf(expiresRaw)[key], revisions: this._recordOf(revisionsRaw) };
       });
-      if (!raw) return null;
+      if (!raw) return { value: null };
       if (this._isExpired(expires)) {
         await this._expire(key);
-        return null;
+        return { value: null };
       }
-      return await this._decrypt(key, raw);
+      return { value: await this._decrypt(key, raw), revision: this._revisionIn(revisions, key) };
     } catch (err) {
       this._reportReadFailure(key, options, err);
-      return null;
+      return { value: null };
     }
   }
 
   // ----------------------------------------------------------------------------------------------
 
   /**
-   * Stores a value — the value and its expiration in one transaction. Writes of a key are applied in the order they
-   * were called.
+   * Stores a value — the value, its expiration and its revision in one transaction: the revision is read and raised
+   * there, so the revisions of a key rise in the order the writes of every tab are saved. Writes of a key are applied
+   * in the order they were called.
    * @param {string} key - Key to store under
    * @param {any} value - JSON; null or undefined removes the key.
    * @param {number} [expire] - Expiration in milliseconds from now; 0 or less removes the key.
@@ -338,8 +372,10 @@ class IndexedDBAdapter extends StorageAdapter {
         const stored = await this._encrypt(key, JSON.stringify(value));
         if (stored === null) return false;
         const expiresAt = typeof expire === "number" ? Date.now() + expire : null;
+        /** @type {import("./StorageAdapter.js").NextRevision} */
+        let next;
 
-        // Awaited together: when one request fails, the other's failure (the transaction aborts) has a handler too
+        // Awaited together: when one request fails, the others' failure (the transaction aborts) has a handler too
         await this._withStore("readwrite", (store) =>
           Promise.all([
             this._answerOf(store.put(stored, this._fullKey(key))),
@@ -348,12 +384,18 @@ class IndexedDBAdapter extends StorageAdapter {
                 expires[key] = expiresAt;
                 return true;
               }
-              return this._removeExpire(expires, key);
+              return this._removeEntry(expires, key);
+            }),
+            this._changeRecord(store, this.revisionKey, (revisions) => {
+              next = this._nextRevision(key, revisions[this._fullKey(key)]);
+              revisions[this._fullKey(key)] = next.revision;
+              return true;
             }),
           ]),
         );
+        this._wrote(key, next);
         if (this.enableSyncTabs) {
-          this.emitDataChange(key, undefined, "set");
+          this.emitDataChange(key, undefined, "set", next.revision);
         }
         return true;
       } catch (err) {
@@ -376,7 +418,8 @@ class IndexedDBAdapter extends StorageAdapter {
     await this._withStore("readwrite", (store) =>
       Promise.all([
         this._answerOf(store.delete(this._fullKey(key))),
-        this._changeExpires(store, (expires) => this._removeExpire(expires, key)),
+        this._changeExpires(store, (expires) => this._removeEntry(expires, key)),
+        this._forgetRevision(store, key),
       ]),
     );
     if (this.enableSyncTabs) {
@@ -397,7 +440,7 @@ class IndexedDBAdapter extends StorageAdapter {
     return this._inOrder(key, async () => {
       try {
         const removed = await this._withStore("readwrite", async (store) => {
-          const expires = this._expiresOf(await this._answerOf(store.get(this.expireKey)));
+          const expires = this._recordOf(await this._answerOf(store.get(this.expireKey)));
           if (!this._isExpired(expires[key])) {
             return false;
           }
@@ -405,6 +448,7 @@ class IndexedDBAdapter extends StorageAdapter {
           await Promise.all([
             this._answerOf(store.delete(this._fullKey(key))),
             this._answerOf(store.put(JSON.stringify(expires), this.expireKey)),
+            this._forgetRevision(store, key),
           ]);
           return true;
         });
@@ -476,7 +520,7 @@ class IndexedDBAdapter extends StorageAdapter {
           this._answerOf(store.getKey(fullKey)),
           this._answerOf(store.get(this.expireKey)),
         ]);
-        return { found: storedKey !== undefined, expires: this._expiresOf(expiresRaw)[key] };
+        return { found: storedKey !== undefined, expires: this._recordOf(expiresRaw)[key] };
       });
       return found && !this._isExpired(expires);
     } catch (err) {
@@ -526,8 +570,9 @@ class IndexedDBAdapter extends StorageAdapter {
             store.delete(stored);
           }
         }
-        // The expirations record holds only keys of the namespace: none is left
+        // The expirations and revisions records hold only keys of the namespace: none is left
         store.delete(this.expireKey);
+        store.delete(this.revisionKey);
         if (withMeta) {
           store.delete(this.metaKey);
         }
@@ -573,7 +618,7 @@ class IndexedDBAdapter extends StorageAdapter {
    */
   async deleteExpire(key) {
     try {
-      await this._withStore("readwrite", (store) => this._changeExpires(store, (expires) => this._removeExpire(expires, key)));
+      await this._withStore("readwrite", (store) => this._changeExpires(store, (expires) => this._removeEntry(expires, key)));
     } catch (err) {
       logError(`Error deleting expire for key '${key}':`, err);
     }
@@ -582,17 +627,17 @@ class IndexedDBAdapter extends StorageAdapter {
   // ----------------------------------------------------------------------------------------------
 
   /**
-   * Removes the expiration of a key from the map.
+   * Removes the entry of a key from a record (expirations, revisions).
    * @private
-   * @param {Object<string, number>} expires
+   * @param {Object<string, any>} record
    * @param {string} key
    * @returns {boolean} Whether the key had one.
    */
-  _removeExpire(expires, key) {
-    if (!(key in expires)) {
+  _removeEntry(record, key) {
+    if (!(key in record)) {
       return false;
     }
-    delete expires[key];
+    delete record[key];
     return true;
   }
 

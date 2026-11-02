@@ -25,11 +25,12 @@ class PiniaAdapter extends StoreAdapter {
   }
   // ----------------------------------------------------------------------------------------------
   /**
-   * Writes the store's state now and on every change after (see StoreAdapter._persist).
+   * Writes the store's state now (unless storage already holds it) and on every change after (see
+   * StoreAdapter._onChange).
    * @param {any} store - The Pinia store.
    * @param {string} key - Storage key.
    * @param {import("./StoreAdapter.js").SetInStorageOptions} [options]
-   * @returns {Promise<boolean>} true once the state is written for the first time.
+   * @returns {Promise<boolean>} true once the state is written for the first time (or found stored).
    * @throws {Error} If it is not a Pinia store, or the first write threw.
    * @example
    * await piniaAdapter.setInStorage(useUserStore(), "user-data", { ignoreKeys: ["password", "token"] });
@@ -37,27 +38,25 @@ class PiniaAdapter extends StoreAdapter {
   async setInStorage(store, key, options = {}) {
     this._checkStore(store);
     const kept = this._keep(key, store, options);
-    return new Promise((resolve, reject) => {
-      kept.unsubscribe = store.$subscribe((mutation, state) => {
-        const write = this._onChange(kept, state);
-        if (!write) {
-          resolve(true);
-          return;
+    await this._start(
+      kept,
+      () => store.$state,
+      (incoming) => {
+        if (!isPlainObject(incoming)) {
+          throw new Error(NOT_AN_OBJECT);
         }
-        write.then(() => resolve(true), reject);
+        store.$state = this._merged(store.$state, incoming);
+      }
+    );
+    if (this.stores[key] !== kept) {
+      return true;
+    }
+    kept.unsubscribe = store.$subscribe((mutation, state) => {
+      this._onChange(kept, state)?.catch(() => {
       });
-      this._listenToTabs(
-        kept,
-        () => store.$state,
-        (incoming) => {
-          if (!isPlainObject(incoming)) {
-            throw new Error(NOT_AN_OBJECT);
-          }
-          store.$state = this._merged(store.$state, incoming);
-        }
-      );
-      store.$patch({ ...store.$state });
     });
+    await this._firstWrite(kept, store.$state);
+    return true;
   }
   // ----------------------------------------------------------------------------------------------
   /**
@@ -72,6 +71,7 @@ class PiniaAdapter extends StoreAdapter {
     this._checkStore(store);
     const storage = await this.adapter.get(key, { onError: options.onError });
     if (storage === null) {
+      this._rememberLoaded(key, null);
       return;
     }
     if (!isPlainObject(storage)) {
@@ -79,6 +79,7 @@ class PiniaAdapter extends StoreAdapter {
       return;
     }
     store.$patch(storage);
+    this._rememberLoaded(key, storage);
     return true;
   }
 }

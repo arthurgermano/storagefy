@@ -39,7 +39,59 @@ import { logInfo, logWarn, logError } from "../helpers/loggerHelper.js";
  * @property {string} key - The storage key.
  * @property {string} [value] - The stored value (localStorage and sessionStorage; IndexedDB is read again).
  * @property {string} origin - What happened ("set", "delete", "reset").
+ * @property {Revision} [revision] - The order of the write ("set"); a message of 1.3.x has none.
  */
+
+/**
+ * The order of a write among every write of a key, in every tab of the app: a store applies another tab's state only
+ * when it is newer than the one it holds — an older message, or a stale state written late, never undoes a newer one.
+ * @typedef {Object} Revision
+ * @property {number} at - When it was written (ms since the epoch) — or, when the clock gives no later time than the
+ *   newest revision of the key known, one more than it: the revisions of a key always rise.
+ * @property {string} by - The adapter that wrote it: of two writes at the same `at`, the one with the greater `by` is
+ *   the newer, in every tab alike.
+ */
+
+/**
+ * The revision of a new write, and the newest revision of the key known when it was made.
+ * @typedef {Object} NextRevision
+ * @property {Revision} revision
+ * @property {Revision} [basis] - None when no revision of the key was known (stored or told).
+ */
+
+/**
+ * What is stored under a key, with the order of its write.
+ * @typedef {Object} StoredRead
+ * @property {any} value - The value, or null when absent, expired or unreadable.
+ * @property {Revision} [revision] - The revision of the value; none for a value written before 1.4.0, or none stored.
+ */
+
+// -------------------------------------------------------------------------------------------------
+
+/**
+ * Whether a value is a revision (see Revision) — a record or a message may hold anything.
+ * @param {unknown} value
+ * @returns {value is Revision}
+ */
+export function isRevision(value) {
+  return Number.isFinite(value?.at) && typeof value.by === "string";
+}
+
+// -------------------------------------------------------------------------------------------------
+
+/**
+ * Whether a revision is newer than another: a later `at`, or the same `at` and a greater `by`. Nothing is older than
+ * any revision.
+ * @param {Revision} revision
+ * @param {Revision} [than]
+ * @returns {boolean}
+ */
+export function isNewerRevision(revision, than) {
+  if (!than) {
+    return true;
+  }
+  return revision.at > than.at || (revision.at === than.at && revision.by > than.by);
+}
 
 // -------------------------------------------------------------------------------------------------
 
@@ -61,6 +113,16 @@ class StorageAdapter {
     // The operation on every key in progress (reset, clear): it runs after the writes asked before it, and the
     // writes asked after it wait for it
     this._barrier = Promise.resolve();
+    // The newest revision of each key this adapter knows — written here or told by another tab: a new write is always
+    // newer than all of them, even after the key was removed (and its stored revision with it)
+    /** @type {Map<string, Revision>} */
+    this._revisions = new Map();
+    // The last write of each key this adapter saved: its revision — what a store holds after writing — and the newest
+    // revision known when it was written
+    /** @type {Map<string, NextRevision>} */
+    this._written = new Map();
+    /** Whether the tabs of the app share the storage (IndexedDB, localStorage): a tab can read what another wrote */
+    this.sharedBetweenTabs = false;
     this.keyDerivation = cryptoHelper.DEFAULT_KEY_DERIVATION;
     /** @type {ReturnType<typeof setInterval> | null} The expiry watcher (the browser's and Node's timers differ) */
     this._expireTimer = null;
@@ -86,6 +148,20 @@ class StorageAdapter {
    * @returns {Promise<any>} The value, or null when absent, expired or unreadable.
    */
   async get(key, options) {
+    return (await this._read(key, options)).value;
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * What is stored under a key, with its revision — after the writes of the key asked before.
+   * @abstract
+   * @protected
+   * @param {string} key - The storage key.
+   * @param {ReadOptions} [options]
+   * @returns {Promise<StoredRead>} Never rejects: a value that cannot be read is null, told through onError.
+   */
+  async _read(key, options) {
     throw new Error("Not implemented");
   }
 
@@ -274,6 +350,73 @@ class StorageAdapter {
   // ----------------------------------------------------------------------------------------------
 
   /**
+   * Knows a revision of a key — written here or told by another tab — when it is newer than the one known.
+   * @protected
+   * @param {string} key - The storage key.
+   * @param {unknown} revision - Anything that is not a revision is left out.
+   */
+  _noteRevision(key, revision) {
+    if (isRevision(revision) && isNewerRevision(revision, this._revisions.get(key))) {
+      this._revisions.set(key, revision);
+    }
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * The revision of a new write of a key: newer than the one stored and than every one known.
+   * @protected
+   * @param {string} key - The storage key.
+   * @param {unknown} stored - The revision stored with the key now (read with the write, so no write lands between).
+   * @returns {NextRevision}
+   */
+  _nextRevision(key, stored) {
+    const known = this._revisions.get(key);
+    const basis = isRevision(stored) && isNewerRevision(stored, known) ? stored : known;
+    return { revision: { at: Math.max(Date.now(), (basis?.at ?? 0) + 1), by: this.adapterId }, basis };
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * Keeps the revision of a write saved here, and what it was written after.
+   * @protected
+   * @param {string} key - The storage key.
+   * @param {NextRevision} next - As _nextRevision gave it.
+   */
+  _wrote(key, next) {
+    this._written.set(key, next);
+    this._noteRevision(key, next.revision);
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * The revision of the last write of a key saved by this adapter.
+   * @protected
+   * @param {string} key - The storage key.
+   * @returns {Revision|undefined}
+   */
+  _writtenRevision(key) {
+    return this._written.get(key)?.revision;
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * The newest revision of a key known when this adapter saved its last write of it — none when it knew none. A write
+   * of another tab newer than it was not known: made at the same time, it may have landed after this one.
+   * @protected
+   * @param {string} key - The storage key.
+   * @returns {Revision|undefined}
+   */
+  _writtenAfter(key) {
+    return this._written.get(key)?.basis;
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
    * Removes a key found expired — in the key's queue, and only if it is still expired when its turn comes: a write
    * asked in the meantime (with a new expiration, or none) wins over the expiration seen before it.
    * @abstract
@@ -370,6 +513,21 @@ class StorageAdapter {
   // ----------------------------------------------------------------------------------------------
 
   /**
+   * Calls back when a write of another tab reaches what this tab reads of a key — after its message, at times (see
+   * WebStorageAdapter). None here: IndexedDB tells a write once its transaction is saved, and a read after the message
+   * sees it.
+   * @protected
+   * @param {string} key - The storage key.
+   * @param {() => void} callback
+   * @returns {() => void} Stops it.
+   */
+  _onStoredChange(key, callback) {
+    return () => {};
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
    * Generate the full namespaced key (obfuscated when encrypting).
    * @protected
    * @param {string} key - The base key.
@@ -391,11 +549,38 @@ class StorageAdapter {
    */
   _ownKey(storedKey, prefix = "") {
     const full = this.encrypt ? cryptoHelper.simpleDeobfuscate(storedKey) : storedKey;
-    if (full === this.metaKey || full === this.expireKey || !full.startsWith(this.prefix)) {
+    if (this._isRecord(storedKey) || this._isRecord(full) || !full.startsWith(this.prefix)) {
       return null;
     }
     const key = full.slice(this.prefix.length);
     return key.startsWith(prefix) ? key : null;
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * Whether a key is one of the namespace's own records (metadata, expirations, revisions) — never a key of the app.
+   * @private
+   * @param {string} key
+   * @returns {boolean}
+   */
+  _isRecord(key) {
+    return key === this.metaKey || key === this.expireKey || key === this.revisionKey;
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * The revision stored for a key, in the revisions record (keyed by the stored key, so an encrypted namespace shows
+   * no key name).
+   * @protected
+   * @param {Object<string, unknown>} revisions - The revisions record.
+   * @param {string} key - The storage key.
+   * @returns {Revision|undefined}
+   */
+  _revisionIn(revisions, key) {
+    const revision = revisions[this._fullKey(key)];
+    return isRevision(revision) ? revision : undefined;
   }
 
   // ----------------------------------------------------------------------------------------------
@@ -480,12 +665,13 @@ class StorageAdapter {
    * @param {string} key - The key that changed.
    * @param {string|undefined} value - The stored value, when it goes with the message (localStorage, sessionStorage).
    * @param {string} origin - What happened.
+   * @param {Revision} [revision] - The revision of the write.
    */
-  emitDataChange(key, value, origin) {
+  emitDataChange(key, value, origin, revision) {
     if (!this.channelName || !origin) {
       return;
     }
-    this.channel.emit({ adapterId: this.adapterId, dbName: this.dbName, key, value, origin });
+    this.channel.emit({ adapterId: this.adapterId, dbName: this.dbName, key, value, origin, revision });
   }
 
   // ----------------------------------------------------------------------------------------------

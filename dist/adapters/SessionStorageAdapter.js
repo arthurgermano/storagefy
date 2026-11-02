@@ -5,7 +5,7 @@ class SessionStorageAdapter extends WebStorageAdapter {
    * @throws {Error} If `sessionStorage` is not available, or an encryption option is invalid.
    */
   constructor(options) {
-    super(options, { storageName: "sessionStorage", label: "SessionStorage" });
+    super(options, { storageName: "sessionStorage", label: "SessionStorage", shared: false });
   }
 }
 var SessionStorageAdapter_default = SessionStorageAdapter;

@@ -23,7 +23,8 @@ describe.each([
 
     await adapter.set("cart", { items: 1 });
 
-    expect(writes.mock.calls.map(([key]) => key)).toEqual([adapter._fullKey("cart")]);
+    // The value and its revision (1.4.0) — the expirations record is not touched
+    expect(writes.mock.calls.map(([key]) => key)).toEqual([adapter._fullKey("cart"), adapter.revisionKey]);
   });
 
   it("drops the expiration of a key written again without one", async () => {

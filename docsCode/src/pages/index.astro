@@ -31,6 +31,30 @@ import Layout from "../layouts/Layout.astro";
     </section>
 
     <section class="strf-section">
+      <h2>What's new in 1.4.0</h2>
+      <ul>
+        <li>
+          Every write has a revision: a store applies another tab's state only when it is newer than its own. A
+          change in one tab is never undone by an older state from another — two tabs changing a store at once end
+          with the same state, the one stored (with localStorage, the tab of the newer change writes it again:
+          localStorage may save the older one last).
+        </li>
+        <li>
+          A change of an <code>ignoreKeys</code> key alone writes nothing (and no longer renews the
+          <code>timeout</code> expiration); <code>setInStorage</code> does not write a state already stored.
+        </li>
+        <li>
+          With IndexedDB and localStorage, a tab shown again (back from the background or the page cache) reads
+          storage again.
+        </li>
+      </ul>
+      <p>
+        Values stay readable both ways between 1.3.0 and 1.4.0. See the
+        <a href="https://github.com/arthurgermano/storagefy/blob/main/CHANGELOG.md">changelog</a>.
+      </p>
+    </section>
+
+    <section class="strf-section">
       <h2>What's new in 1.3.0</h2>
       <ul>
         <li>

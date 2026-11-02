@@ -51,9 +51,9 @@ function copyOf(value) {
  * writes of its storage adapter and the errors told through onError.
  * @param {string} key
  * @param {{ library: "pinia"|"svelte"|"zustand", storage: string, initial: any, storageOptions?: object,
- *   syncTabs?: boolean, load?: boolean }} how
+ *   syncTabs?: boolean, load?: boolean, ignoreKeys?: string[] }} how
  */
-async function keep(key, { library, storage, initial, storageOptions = {}, syncTabs = true, load = false }) {
+async function keep(key, { library, storage, initial, storageOptions = {}, syncTabs = true, load = false, ignoreKeys }) {
   const storageAdapter = openStorage(storage, { channelName: "app-tabs", enableSyncTabs: true, ...storageOptions });
   const entry = { library, storageAdapter, writes: 0, errors: [] };
   const set = storageAdapter.set.bind(storageAdapter);
@@ -67,7 +67,7 @@ async function keep(key, { library, storage, initial, storageOptions = {}, syncT
   if (load) {
     entry.loaded = (await entry.storeAdapter.getFromStorage(entry.store, key, { onError })) === true;
   }
-  await entry.storeAdapter.setInStorage(entry.store, key, { syncTabs, onError });
+  await entry.storeAdapter.setInStorage(entry.store, key, { syncTabs, onError, ignoreKeys });
   entry.writes = 0;
   kept[key] = entry;
 }

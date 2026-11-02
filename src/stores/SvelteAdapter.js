@@ -48,30 +48,35 @@ class SvelteAdapter extends StoreAdapter {
    * @param {any} store - A Svelte writable store.
    * @param {string} key - Storage key.
    * @param {import("./StoreAdapter.js").SetInStorageOptions} [options]
-   * @returns {Promise<boolean>} true once the value is written for the first time (or found empty).
+   * @returns {Promise<boolean>} true once the value is written for the first time (or found stored, or empty).
    * @throws {Error} If it is not a writable store, or the first write threw.
    */
   async setInStorage(store, key, options = {}) {
     this._checkStore(store);
     const kept = this._keep(key, store, options);
-
-    return new Promise((resolve, reject) => {
-      // A Svelte store calls its subscriber at once with the value it holds: that is the first write
-      kept.unsubscribe = store.subscribe((state) => {
-        const write = this._onChange(kept, state);
-        if (!write) {
-          resolve(true);
-          return;
-        }
-        write.then(() => resolve(true), reject);
-      });
-
-      this._listenToTabs(
-        kept,
-        () => this._valueOf(store),
-        (incoming) => store.update((current) => this._merged(current, incoming)),
-      );
+    await this._start(
+      kept,
+      () => this._valueOf(store),
+      (incoming) => store.update((current) => this._merged(current, incoming)),
+    );
+    // Kept again, or no longer, while storage was read
+    if (this.stores[key] !== kept) {
+      return true;
+    }
+    let firstWrite = Promise.resolve();
+    let started = false;
+    // A Svelte store calls its subscriber at once with the value it holds: that is the first write
+    kept.unsubscribe = store.subscribe((state) => {
+      if (!started) {
+        started = true;
+        firstWrite = this._firstWrite(kept, state);
+        return;
+      }
+      // A failed write is told through onError
+      this._onChange(kept, state)?.catch(() => {});
     });
+    await firstWrite;
+    return true;
   }
 
   // ----------------------------------------------------------------------------------------------
@@ -87,6 +92,7 @@ class SvelteAdapter extends StoreAdapter {
   async getFromStorage(store, key, options = {}) {
     this._checkStore(store);
     const storage = await this.adapter.get(key, { onError: options.onError });
+    this._rememberLoaded(key, storage);
     if (storage === null) {
       return;
     }

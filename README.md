@@ -118,12 +118,17 @@ reported to `onError`; the store keeps its state.
 ### `setInStorage(store, key, options?)`
 
 Writes the store's state now and on every change after. A burst of changes is written once after the write in
-progress — the last state always wins.
+progress — the last state always wins. A change that leaves the stored part as it is (an `ignoreKeys` key alone)
+writes nothing.
+
+It first reads what is stored under `key`: a state already stored is not written again, and a state another tab wrote
+after your `getFromStorage` is put in the store instead of being written over. Without `getFromStorage` before it, the
+store's state is written over what is stored.
 
 | Option | What it does |
 |---|---|
 | `ignoreKeys` | State left out of storage. Dot notation reaches nested keys: `["draft", "user.password"]` |
-| `timeout` | ⚠️ **Expiration** of the stored state, in ms after each write — not a time limit: after it, the stored state is gone |
+| `timeout` | ⚠️ **Expiration** of the stored state, in ms after each write — not a time limit: after it, the stored state is gone. A change of an `ignoreKeys` key alone writes nothing, so it does not renew it |
 | `syncTabs` | Apply the changes of the other tabs to this store (see [Sync between tabs](#-sync-between-tabs)) |
 | `onError` | Called with an `Error` when the state could not be saved, or a change from another tab could not be read or applied |
 
@@ -166,6 +171,13 @@ Good to know:
   and a write to localStorage may reach the other tabs after the message does (Firefox). With sessionStorage the change
   is applied to the store, not to this tab's sessionStorage. IndexedDB is read again: a write is told once its
   transaction is saved.
+- Every write has a revision, and a store applies only a state newer than the one it holds: a message heard late, or a
+  state another tab wrote before it knew this one, never undoes a newer change. Two tabs changing a store at the same
+  moment end with the same state — the one stored, the newer: a store is written whole, so the other change is lost.
+  With localStorage, which orders no write of one tab with another's, the tab of the newer change writes it again when
+  it hears the older one, or sees it reach storage (the `storage` event): storage may have saved the older last.
+- With IndexedDB and localStorage, a tab shown again (back from the background, or from the browser's page cache)
+  reads storage again: the changes it missed meanwhile are applied.
 - A change whose state the store already holds (`ignoreKeys` left out) is not applied again.
 - The changes are applied in the order they came — reading or decrypting one never lets an older change land last.
   Two objects are merged (what `ignoreKeys` left out stays in memory); an array or any other value replaces the state.
@@ -229,6 +241,12 @@ import type {
   FrameworkAdapterOptions, // get*Adapter
 } from "storagefy";
 ```
+
+## ⬆️ Upgrading to 1.4.0
+
+Nothing to change in your code. A change of an `ignoreKeys` key alone no longer writes — so it no longer renews the
+`timeout` expiration — and `setInStorage` does not write a state that is already stored. Values stay readable both
+ways between 1.3.0 and 1.4.0. See [CHANGELOG.md](CHANGELOG.md).
 
 ## ⬆️ Upgrading to 1.3.0
 

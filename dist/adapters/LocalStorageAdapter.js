@@ -5,7 +5,7 @@ class LocalStorageAdapter extends WebStorageAdapter {
    * @throws {Error} If `localStorage` is not available, or an encryption option is invalid.
    */
   constructor(options) {
-    super(options, { storageName: "localStorage", label: "LocalStorage" });
+    super(options, { storageName: "localStorage", label: "LocalStorage", shared: true });
   }
 }
 var LocalStorageAdapter_default = LocalStorageAdapter;

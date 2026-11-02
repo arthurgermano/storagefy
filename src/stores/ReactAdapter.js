@@ -96,8 +96,8 @@ class ReactAdapter extends StoreAdapter {
   // ----------------------------------------------------------------------------------------------
 
   /**
-   * Writes the store's state on every change (see StoreAdapter._persist) — and at once for a store that tells its
-   * state (getState), as Redux and Zustand do. A null or undefined state removes the stored key. The state is read
+   * Writes the store's state on every change (see StoreAdapter._onChange) — and at once for a store that tells its
+   * state (getState), as Redux and Zustand do, unless storage already holds it. A null or undefined state removes the stored key. The state is read
    * with getState, or get; a store with neither is read from what it passes its listeners — a notification that
    * passes nothing writes nothing.
    * @param {any} store - A Redux, Zustand or compatible store.
@@ -112,6 +112,15 @@ class ReactAdapter extends StoreAdapter {
   async setInStorage(store, key, options = {}) {
     this._checkStore(store);
     const kept = this._keep(key, store, options);
+    await this._start(
+      kept,
+      () => this._currentOf(store),
+      (incoming) => this._apply(store, incoming),
+    );
+    // Kept again, or no longer, while storage was read
+    if (this.stores[key] !== kept) {
+      return true;
+    }
 
     /** @returns {Promise<void>} the write of this state (see StoreAdapter._onChange) — a failed one was told through onError */
     const handleStateChange = (state) => (this._onChange(kept, state) ?? Promise.resolve()).catch(() => {});
@@ -120,7 +129,7 @@ class ReactAdapter extends StoreAdapter {
     // only by a store that tells its state to its listeners alone
     let firstWrite = Promise.resolve();
     if (typeof store.getState === "function") {
-      firstWrite = handleStateChange(store.getState());
+      firstWrite = this._firstWrite(kept, store.getState()).catch(() => {});
       kept.unsubscribe = store.subscribe(() => {
         handleStateChange(store.getState());
       });
@@ -136,12 +145,6 @@ class ReactAdapter extends StoreAdapter {
         }
       });
     }
-
-    this._listenToTabs(
-      kept,
-      () => this._currentOf(store),
-      (incoming) => this._apply(store, incoming),
-    );
     await firstWrite;
     return true;
   }
@@ -160,6 +163,7 @@ class ReactAdapter extends StoreAdapter {
     this._checkStore(store);
     const storage = await this.adapter.get(key, { onError: options.onError });
     if (storage === null) {
+      this._rememberLoaded(key, null);
       return;
     }
     // Read from storage just now: a value of its own, shared with nothing
@@ -171,6 +175,7 @@ class ReactAdapter extends StoreAdapter {
       logError("Cannot update store: setState or dispatch method not found");
       throw new Error("Cannot update store: setState or dispatch method not found");
     }
+    this._rememberLoaded(key, storage);
     return true;
   }
 

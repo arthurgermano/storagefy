@@ -30,6 +30,48 @@ for (const storage of ["localStorage", "indexedDB"]) {
   }
 }
 
+for (const storage of ["localStorage", "indexedDB"]) {
+  test(`pinia + ${storage} — a change of an ignored key alone writes nothing, and never undoes the other tab's change`, async ({ context }) => {
+    const [here, there] = [await openTab(context), await openTab(context)];
+    for (let round = 0; round < 10; round++) {
+      const key = `profile-${round}`;
+      for (const tab of [here, there]) {
+        await keepIn(tab, key, { library: "pinia", storage, initial: { name: null, draft: "" }, ignoreKeys: ["draft"] });
+      }
+
+      // At the same moment: there only types a draft (memory only), here makes a real change
+      await Promise.all([changeIn(there, key, { draft: "typing" }), changeIn(here, key, { name: "Ana" })]);
+
+      await eventually(there, (key) => window.lab.read(key).name, "Ana", key);
+      await here.waitForTimeout(100);
+      expect(await here.evaluate((key) => window.lab.read(key).name, key)).toBe("Ana");
+      expect(await writesIn(there, key)).toBe(0);
+    }
+    expectNoPageErrors(here, there);
+  });
+
+  test(`pinia + ${storage} — two tabs changing a store at once end with the same state, the one stored`, async ({ context }) => {
+    const [here, there] = [await openTab(context), await openTab(context)];
+    const storedIn = (page, key) => page.evaluate((key) => window.lab.kept[key].storageAdapter.get(key), key);
+    for (let round = 0; round < 10; round++) {
+      const key = `profile-${round}`;
+      for (const tab of [here, there]) {
+        await keepIn(tab, key, { library: "pinia", storage, initial: { name: null, age: null } });
+      }
+
+      await Promise.all([changeIn(here, key, { name: "Ana" }), changeIn(there, key, { age: 3 })]);
+
+      // The tab whose write may have been saved first writes again when it hears the other's: it takes a message
+      const agree = async () => {
+        const [inHere, inThere, stored] = [await here.evaluate(readStore, key), await there.evaluate(readStore, key), await storedIn(here, key)];
+        return JSON.stringify(inThere) === JSON.stringify(inHere) && JSON.stringify(stored) === JSON.stringify(inHere);
+      };
+      await expect.poll(agree, { timeout: 5000 }).toBe(true);
+    }
+    expectNoPageErrors(here, there);
+  });
+}
+
 test("svelte + localStorage — an array and a number reach the other tab as they are", async ({ context }) => {
   const [here, there] = [await openTab(context), await openTab(context)];
   for (const tab of [here, there]) {

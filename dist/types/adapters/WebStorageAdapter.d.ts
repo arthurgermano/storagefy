@@ -11,12 +11,17 @@ export type WebStorageKind = {
      * - Its name in messages.
      */
     label: string;
+    /**
+     * - Whether the tabs of the app share it (localStorage) or each has its own (sessionStorage).
+     */
+    shared: boolean;
 };
 /**
  * Which Web Storage an adapter uses.
  * @typedef {Object} WebStorageKind
  * @property {"localStorage"|"sessionStorage"} storageName - The global it reads and writes.
  * @property {string} label - Its name in messages.
+ * @property {boolean} shared - Whether the tabs of the app share it (localStorage) or each has its own (sessionStorage).
  */
 /**
  * @class WebStorageAdapter
@@ -36,6 +41,7 @@ declare class WebStorageAdapter extends StorageAdapter {
     encrypt: boolean;
     expireKey: string;
     metaKey: string;
+    revisionKey: string;
     prefix: string;
     adapterId: string;
     expireCheckInterval: number;
@@ -69,6 +75,18 @@ declare class WebStorageAdapter extends StorageAdapter {
      * @param {string} key
      */
     private _forgetExpire;
+    /**
+     * The revisions of the namespace (see StorageAdapter._revisionIn).
+     * @private
+     * @returns {Object<string, unknown>}
+     */
+    private _loadRevisions;
+    /**
+     * Forgets the revision of a key — written only when the key had one.
+     * @private
+     * @param {string} key
+     */
+    private _forgetRevision;
     /**
      * Removes a key and its expiration, and tells the other tabs.
      * @private

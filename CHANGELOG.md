@@ -1,5 +1,59 @@
 # Changelog
 
+## 1.4.0
+
+### Fixed
+
+- **A change in one tab could be undone by another tab, with no error** (stores with `syncTabs`):
+  - **A change of an ignored key alone** (`ignoreKeys`) wrote the stored part again — unchanged — and told the other
+    tabs. A tab that had just made a real change received this older state and applied it: the change was lost, in
+    memory and in storage. With localStorage it happened almost every time two tabs changed at once.
+  - **A tab opening** wrote its state as `setInStorage` started, even when storage already held it — and when another
+    tab changed the store between `getFromStorage` and `setInStorage`, the opening tab wrote the older state over it.
+  - **Two tabs changing the store at once ended different**: with localStorage, each took the other's state (and
+    storage held one of them); with IndexedDB, a tab could read storage before its own write was saved, and keep an
+    older state.
+- **A tab back from the background, or from the browser's page cache, missed the changes made meanwhile**: it never
+  heard the messages, and stayed with the older state until the next change.
+
+### Added
+
+- **The revision of each write**: when it was written, and by which adapter — the revisions of a key always rise, in
+  every tab alike. A store applies another tab's state only when it is newer than the one it holds, so a message heard
+  late, or a state another tab wrote before it knew this one, never undoes a newer one. Two tabs changing the store at
+  once end with the same state, the one stored (the newer; the other change is lost — a store is written whole).
+  With IndexedDB the revision is read and raised in the write's transaction; with localStorage and sessionStorage,
+  with the write. The messages carry it (`DataChange.revision`).
+- **localStorage: the tab of the newer of two writes made at once writes it again.** Between tabs, localStorage orders
+  no write of one with another's: the older may be saved last, and storage would keep the state every tab left. The
+  tab whose write is newer writes its state again — one write more, only then — when it hears the message of an older
+  write it did not know as it wrote, or when the older write reaches its localStorage after its own (the `storage`
+  event; Chromium leaves the event out while the tab's own write is on its way, Firefox may deliver the message long
+  before the write). A value a tab sees stored already is removed before it is written again: `setItem` with the same
+  value changes nothing, and another tab's write saved over it, not seen by this tab yet, would stay.
+- With IndexedDB or localStorage, **a tab shown again reads storage again** (`visibilitychange`, `pageshow` from the
+  page cache) and applies what is stored when it is newer. Not with sessionStorage: each tab has its own.
+
+### Changed
+
+- **A change that leaves the stored part of the state as it is writes nothing** (a change of an `ignoreKeys` key
+  alone, or a state set again to what it was): no write, no message to the other tabs. A write that failed is written
+  again on the next change, whatever it is.
+- **`timeout`: a change of an ignored key alone no longer renews the expiration** — nothing is written, and the
+  expiration counts from the last write of the stored part.
+- **`setInStorage` first reads what is stored** under the key: when storage holds the store's state already, it is not
+  written again (its expiration is set again, as that write did: renewed with `timeout`, removed without). When
+  `getFromStorage` loaded the key before and another tab wrote since, the newer stored state is put in the store
+  instead of being written over. Without `getFromStorage` before it, `setInStorage` writes the store's state over what
+  is stored, as before. A value that cannot be read is written over, as before.
+- Pinia: the first write no longer goes through `$patch` — the store's other subscribers see no mutation when
+  `setInStorage` starts.
+- **Storage format**: each namespace keeps a revisions record (`STRGF_${dbName}__revisions`, keyed by the stored key
+  names — obfuscated when encrypting), written with each value and removed with it (`delete`, expiration, `reset`,
+  `clear`); it is never listed. The values are stored as in 1.3.0: **1.3.0 reads what 1.4.0 writes, and 1.4.0 reads
+  what 1.3.0 wrote** (a value without revision is older than any write). A message of a 1.3.0 tab (no revision) is
+  applied as then: when its state differs.
+
 ## 1.3.0
 
 ### Added

@@ -1,6 +1,6 @@
 {
   "name": "storagefy",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Framework-agnostic adapters that keep the state of Pinia, Redux, Zustand, Jotai or Svelte stores in localStorage, sessionStorage or IndexedDB — with expiration, optional encryption and sync between tabs.",
   "main": "dist/index.cjs",
   "module": "./dist/index.js",

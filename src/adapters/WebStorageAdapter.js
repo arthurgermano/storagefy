@@ -9,6 +9,7 @@ import { logError, logInfo } from "../helpers/loggerHelper.js";
  * @typedef {Object} WebStorageKind
  * @property {"localStorage"|"sessionStorage"} storageName - The global it reads and writes.
  * @property {string} label - Its name in messages.
+ * @property {boolean} shared - Whether the tabs of the app share it (localStorage) or each has its own (sessionStorage).
  */
 
 // -------------------------------------------------------------------------------------------------
@@ -51,10 +52,13 @@ class WebStorageAdapter extends StorageAdapter {
     this._setEncryption(password, keyDerivation);
     this.expireKey = `STRGF_${dbName}__expires`;
     this.metaKey = `STRGF_${dbName}__meta`;
+    this.revisionKey = `STRGF_${dbName}__revisions`;
     this.prefix = `${dbName}__`;
     this.adapterId = generateSimpleId(dbName);
     this.expireCheckInterval = expireCheckInterval;
     this.enableSyncTabs = enableSyncTabs || false;
+    // localStorage is one for every tab; each tab has a sessionStorage of its own
+    this.sharedBetweenTabs = kind.shared;
 
     this._initMeta({ dbName, version, description });
     this._startExpireWatcher();
@@ -133,32 +137,98 @@ class WebStorageAdapter extends StorageAdapter {
   // ----------------------------------------------------------------------------------------------
 
   /**
-   * Retrieves a stored item — after the writes of the key asked before.
-   * @param {string} key
-   * @param {import("./StorageAdapter.js").ReadOptions} [options]
-   * @returns {Promise<any|null>} The stored value, or null if absent, expired or unreadable.
+   * The revisions of the namespace (see StorageAdapter._revisionIn).
+   * @private
+   * @returns {Object<string, unknown>}
    */
-  async get(key, options = {}) {
-    await this._afterWrites(key);
+  _loadRevisions() {
     try {
-      const raw = this._storage.getItem(this._fullKey(key));
-      if (!raw) return null;
-
-      if (this._isExpired(this._loadExpires()[key])) {
-        await this._expire(key);
-        return null;
-      }
-      return await this._decrypt(key, raw);
+      const raw = this._storage.getItem(this.revisionKey);
+      return raw ? JSON.parse(raw) : {};
     } catch (err) {
-      this._reportReadFailure(key, options, err);
-      return null;
+      logError("Error loading revisions:", err);
+      return {};
     }
   }
 
   // ----------------------------------------------------------------------------------------------
 
   /**
-   * Stores a value. Writes of a key are applied in the order they were called.
+   * Forgets the revision of a key — written only when the key had one.
+   * @private
+   * @param {string} key
+   */
+  _forgetRevision(key) {
+    const revisions = this._loadRevisions();
+    const fullKey = this._fullKey(key);
+    if (fullKey in revisions) {
+      delete revisions[fullKey];
+      this._storage.setItem(this.revisionKey, JSON.stringify(revisions));
+    }
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * Calls back when a write of another tab reaches this tab's localStorage — its value or the revisions record (the
+   * `storage` event; a clear too). Between tabs, localStorage orders no write of one with another's: one may arrive
+   * after its message, and after a newer write of this tab. Never for this tab's own writes, nor with sessionStorage
+   * (each tab has its own); outside a browser there is no tab.
+   * @protected
+   * @param {string} key
+   * @param {() => void} callback
+   * @returns {() => void} Stops it.
+   */
+  _onStoredChange(key, callback) {
+    const win = globalThis.window;
+    if (!this.sharedBetweenTabs || !win) {
+      return () => {};
+    }
+    const fullKey = this._fullKey(key);
+    /** @param {StorageEvent} event */
+    const onStorage = (event) => {
+      if (event.storageArea === this._storage && [fullKey, this.revisionKey, null].includes(event.key)) {
+        callback();
+      }
+    };
+    win.addEventListener("storage", onStorage);
+    return () => win.removeEventListener("storage", onStorage);
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * What is stored under a key, with its revision — after the writes of the key asked before.
+   * @protected
+   * @param {string} key
+   * @param {import("./StorageAdapter.js").ReadOptions} [options]
+   * @returns {Promise<import("./StorageAdapter.js").StoredRead>} The value is null if absent, expired or unreadable.
+   */
+  async _read(key, options = {}) {
+    await this._afterWrites(key);
+    try {
+      const raw = this._storage.getItem(this._fullKey(key));
+      if (!raw) return { value: null };
+
+      if (this._isExpired(this._loadExpires()[key])) {
+        await this._expire(key);
+        return { value: null };
+      }
+      // Read with the value, before the decryption awaits: a write of another tab may land meanwhile
+      const revision = this._revisionIn(this._loadRevisions(), key);
+      return { value: await this._decrypt(key, raw), revision };
+    } catch (err) {
+      this._reportReadFailure(key, options, err);
+      return { value: null };
+    }
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * Stores a value, with its revision — read and raised with the write, in one run that nothing in this tab
+   * interrupts. Another tab's write may land in between all the same (localStorage orders no write of one tab with
+   * another's): see _onStoredChange. Writes of a key are applied in the order they were called.
    * @param {string} key
    * @param {any} value - JSON; null or undefined removes the key.
    * @param {number} [expire] - Expiration in milliseconds from now; 0 or less removes the key.
@@ -174,17 +244,27 @@ class WebStorageAdapter extends StorageAdapter {
         }
         const stored = await this._encrypt(key, JSON.stringify(value));
         if (stored === null) return false;
-        this._storage.setItem(this._fullKey(key), stored);
+        const fullKey = this._fullKey(key);
+        const revisions = this._loadRevisions();
+        const next = this._nextRevision(key, revisions[fullKey]);
+        // A value this tab sees stored already is not written again (setItem changes nothing) — but another tab's write
+        // may have landed over it, unseen here yet: removed first, the write reaches storage, with its revision
+        if (this._storage.getItem(fullKey) === stored) {
+          this._storage.removeItem(fullKey);
+        }
+        this._storage.setItem(fullKey, stored);
 
         if (typeof expire === "number") {
           this._saveExpires({ ...this._loadExpires(), [key]: Date.now() + expire });
         } else {
           this._forgetExpire(key);
         }
+        this._storage.setItem(this.revisionKey, JSON.stringify({ ...revisions, [fullKey]: next.revision }));
+        this._wrote(key, next);
         if (this.enableSyncTabs) {
           // The stored value goes with the message: sessionStorage is not shared between tabs, and a write to
           // localStorage may reach the other tabs after the message does (Firefox) — read there, it would be the old one
-          this.emitDataChange(key, stored, "set");
+          this.emitDataChange(key, stored, "set", next.revision);
         }
         return true;
       } catch (err) {
@@ -205,6 +285,7 @@ class WebStorageAdapter extends StorageAdapter {
   _deleteNow(key) {
     this._storage.removeItem(this._fullKey(key));
     this._forgetExpire(key);
+    this._forgetRevision(key);
     if (this.enableSyncTabs) {
       this.emitDataChange(key, undefined, "delete");
     }
@@ -336,8 +417,9 @@ class WebStorageAdapter extends StorageAdapter {
           keys.push({ stored, key });
         }
       }
-      // The expirations record holds only keys of the namespace: none is left
+      // The expirations and revisions records hold only keys of the namespace: none is left
       this._storage.removeItem(this.expireKey);
+      this._storage.removeItem(this.revisionKey);
       for (const { stored, key } of keys) {
         this._storage.removeItem(stored);
         if (this.enableSyncTabs) {
