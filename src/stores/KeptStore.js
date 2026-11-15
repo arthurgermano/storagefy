@@ -15,6 +15,8 @@ import TabFollower from "./TabFollower.js";
  * @property {SetInStorageOptions} options - Not changed: a copy is kept.
  * @property {import("../adapters/StorageAdapter.js").default} adapter - The storage adapter.
  * @property {() => any} current - The store's state now.
+ * @property {boolean} readable - Whether current reads the store's state (see StoreAdapter._canRead): flush writes only
+ *   a state it read.
  * @property {(incoming: any) => void} apply - Puts a stored state in the store (it may throw: told through onError).
  */
 
@@ -28,13 +30,14 @@ class KeptStore {
   /**
    * @param {KeptStoreParts} parts
    */
-  constructor({ key, store, options, adapter, current, apply }) {
+  constructor({ key, store, options, adapter, current, readable, apply }) {
     this.key = key;
     this.store = store;
     /** @type {SetInStorageOptions & { ignoreKeys: string[] }} */
     this.options = { ...options, ignoreKeys: [...(options.ignoreKeys ?? [])] };
     this.adapter = adapter;
     this.current = current;
+    this.readable = readable;
     /** Whether the store is still kept: false once stopped (destroy, or kept again) */
     this.active = true;
     /** @type {TabFollower | null} Applies the other tabs' changes (syncTabs) */
@@ -48,6 +51,10 @@ class KeptStore {
     this._latest = undefined;
     /** @type {Promise<void> | null} */
     this._writing = null;
+    // Whether the last write was not saved (or threw): what flush answers once the writes are done
+    this._lastWriteFailed = false;
+    /** @type {Promise<void>} What setInStorage does to start keeping the store (see keeping) */
+    this._keeping = Promise.resolve();
     // True while a stored state is put in the store: that change is not written back
     this._applying = false;
     // The start read and the other tabs' changes, one after another
@@ -94,6 +101,18 @@ class KeptStore {
         this.put(value);
       }
     });
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * Keeps what setInStorage does to start keeping the store: flush waits for it first.
+   * @param {Promise<void>} keeping - Rejects when the first write threw.
+   * @returns {Promise<void>} The same promise.
+   */
+  keeping(keeping) {
+    this._keeping = keeping;
+    return keeping;
   }
 
   // ----------------------------------------------------------------------------------------------
@@ -239,6 +258,7 @@ class KeptStore {
           this._latest = undefined;
           const { ignoreKeys, timeout } = this.options;
           const written = await this.adapter.set(this.key, omitKeys(next, ignoreKeys), timeout);
+          this._lastWriteFailed = written === false;
           if (written === false) {
             // Not stored: the next change is written, whatever it is
             this._stored = undefined;
@@ -250,6 +270,7 @@ class KeptStore {
       } catch (error) {
         this._latest = undefined;
         this._stored = undefined;
+        this._lastWriteFailed = true;
         this.report("save", error);
         throw error;
       } finally {
@@ -279,6 +300,24 @@ class KeptStore {
     while (this._writing) {
       await this._writing.catch(() => {});
     }
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * Makes sure the store's state is stored (see StoreAdapter.flush): after setInStorage's start, what the store holds
+   * now is written unless it is stored already — a change its library has not told yet included —, then its writes
+   * are waited for. A store no longer kept, or whose state cannot be read, only has its writes waited for.
+   * @returns {Promise<boolean>} Whether the last write was saved — true when nothing had to be written. Never rejects.
+   */
+  async flush() {
+    // Its first write threw: told through onError — and the state is written again below
+    await this._keeping.catch(() => {});
+    if (this.active && this.readable) {
+      this.onChange(this.current())?.catch(() => {});
+    }
+    await this.ownWritesDone();
+    return !this._lastWriteFailed;
   }
 
   // ----------------------------------------------------------------------------------------------

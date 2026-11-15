@@ -26,6 +26,11 @@ export type KeptStoreParts = {
      */
     current: () => any;
     /**
+     * - Whether current reads the store's state (see StoreAdapter._canRead): flush writes only
+     * a state it read.
+     */
+    readable: boolean;
+    /**
      * - Puts a stored state in the store (it may throw: told through onError).
      */
     apply: (incoming: any) => void;
@@ -40,6 +45,8 @@ export type KeptStoreParts = {
  * @property {SetInStorageOptions} options - Not changed: a copy is kept.
  * @property {import("../adapters/StorageAdapter.js").default} adapter - The storage adapter.
  * @property {() => any} current - The store's state now.
+ * @property {boolean} readable - Whether current reads the store's state (see StoreAdapter._canRead): flush writes only
+ *   a state it read.
  * @property {(incoming: any) => void} apply - Puts a stored state in the store (it may throw: told through onError).
  */
 /**
@@ -50,7 +57,7 @@ declare class KeptStore {
     /**
      * @param {KeptStoreParts} parts
      */
-    constructor({ key, store, options, adapter, current, apply }: KeptStoreParts);
+    constructor({ key, store, options, adapter, current, readable, apply }: KeptStoreParts);
     key: string;
     store: any;
     /** @type {SetInStorageOptions & { ignoreKeys: string[] }} */
@@ -59,6 +66,7 @@ declare class KeptStore {
     };
     adapter: import("../adapters/StorageAdapter.js").default;
     current: () => any;
+    readable: boolean;
     /** Whether the store is still kept: false once stopped (destroy, or kept again) */
     active: boolean;
     /** @type {TabFollower | null} Applies the other tabs' changes (syncTabs) */
@@ -71,6 +79,9 @@ declare class KeptStore {
     _latest: any;
     /** @type {Promise<void> | null} */
     _writing: Promise<void> | null;
+    _lastWriteFailed: boolean;
+    /** @type {Promise<void>} What setInStorage does to start keeping the store (see keeping) */
+    _keeping: Promise<void>;
     _applying: boolean;
     /** @type {Promise<void>} */
     _queue: Promise<void>;
@@ -85,6 +96,12 @@ declare class KeptStore {
      * @returns {Promise<void>} Never rejects.
      */
     start(loaded: string | undefined): Promise<void>;
+    /**
+     * Keeps what setInStorage does to start keeping the store: flush waits for it first.
+     * @param {Promise<void>} keeping - Rejects when the first write threw.
+     * @returns {Promise<void>} The same promise.
+     */
+    keeping(keeping: Promise<void>): Promise<void>;
     /**
      * Keeps how to stop listening to the store (see stop).
      * @param {() => void} unsubscribe
@@ -156,6 +173,13 @@ declare class KeptStore {
      * @returns {Promise<void>}
      */
     ownWritesDone(): Promise<void>;
+    /**
+     * Makes sure the store's state is stored (see StoreAdapter.flush): after setInStorage's start, what the store holds
+     * now is written unless it is stored already — a change its library has not told yet included —, then its writes
+     * are waited for. A store no longer kept, or whose state cannot be read, only has its writes waited for.
+     * @returns {Promise<boolean>} Whether the last write was saved — true when nothing had to be written. Never rejects.
+     */
+    flush(): Promise<boolean>;
     /**
      * Whether the state the store holds is its own last write (not another tab's, nor what storage held as it
      * started).

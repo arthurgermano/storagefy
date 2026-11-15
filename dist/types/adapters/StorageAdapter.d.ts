@@ -151,26 +151,64 @@ declare class StorageAdapter {
      * @throws {Error} If an encryption option is invalid — checked before the channel opens: none is left behind.
      */
     constructor({ dbName, encrypt, password, keyDerivation, expireCheckInterval, channelName, enableSyncTabs, }?: StorageAdapterOptions);
-    dbName: string;
-    encrypt: boolean;
-    prefix: string;
-    metaKey: string;
-    expireKey: string;
-    revisionKey: string;
-    adapterId: string;
-    /** What this adapter knows of the revisions of the writes (see helpers/revisions.js) */
-    revisions: RevisionBook;
-    expireCheckInterval: number;
-    enableSyncTabs: boolean;
-    /** Whether the tabs of the app share the storage (IndexedDB, localStorage): a tab can read what another wrote */
-    sharedBetweenTabs: boolean;
-    _derivedKeys: Map<any, any>;
-    _pendingWrites: Map<any, any>;
-    _barrier: Promise<void>;
-    /** @type {ReturnType<typeof setInterval> | null} The expiry watcher (the browser's and Node's timers differ) */
-    _expireTimer: ReturnType<typeof setInterval> | null;
-    channelName: string;
-    channel: CrossTabChannel;
+    /** @protected */
+    protected dbName: string;
+    /** @protected */
+    protected encrypt: boolean;
+    /**
+     * The keys of the app start with the prefix; the namespace's own records are never listed (see _isRecord)
+     * @private
+     */
+    private prefix;
+    /** @protected */
+    protected metaKey: string;
+    /** @protected */
+    protected expireKey: string;
+    /** @protected */
+    protected revisionKey: string;
+    /** @private */
+    private adapterId;
+    /**
+     * What this adapter knows of the revisions of the writes (see helpers/revisions.js)
+     * @protected
+     */
+    protected revisions: RevisionBook;
+    /** @private */
+    private expireCheckInterval;
+    /** @protected */
+    protected enableSyncTabs: boolean;
+    /**
+     * Whether the tabs of the app share the storage (IndexedDB, localStorage): a tab can read what another wrote
+     * @protected
+     */
+    protected sharedBetweenTabs: boolean;
+    /**
+     * The AES key of each storage key and derivation, derived once (PBKDF2 is slow on purpose). Kept as the promise,
+     * so concurrent reads and writes share one derivation.
+     * @private
+     */
+    private _derivedKeys;
+    /**
+     * The write in progress of each key: writes of a key run one after another, in the order they were asked
+     * @private
+     */
+    private _pendingWrites;
+    /**
+     * The operation on every key in progress (reset, clear): it runs after the writes asked before it, and the writes
+     * asked after it wait for it
+     * @private
+     */
+    private _barrier;
+    /**
+     * The expiry watcher (the browser's and Node's timers differ)
+     * @private
+     * @type {ReturnType<typeof setInterval> | null}
+     */
+    private _expireTimer;
+    /** @private */
+    private channelName;
+    /** @private */
+    private channel;
     /**
      * Retrieve the value for a given key — after the writes of the key asked before.
      * @param {string} key - The storage key.
@@ -328,8 +366,10 @@ declare class StorageAdapter {
      * @throws {Error} If a password is given that is not a non-empty string, or the key derivation is unknown.
      */
     protected _setEncryption(password: string | null | undefined, keyDerivation?: unknown): void;
-    password: string;
-    keyDerivation: unknown;
+    /** @private */
+    private password;
+    /** @private */
+    private keyDerivation;
     /**
      * Runs a write of a key after the writes of that key asked before it — the encryption before a write is
      * asynchronous, and two writes in a row could otherwise land in the reverse order, leaving the older value stored.
@@ -504,4 +544,3 @@ declare class StorageAdapter {
     onDataChanged(callback: (change: DataChange) => void): () => void;
 }
 import { RevisionBook } from "../helpers/revisions.js";
-import CrossTabChannel from "../helpers/CrossTabChannel.js";

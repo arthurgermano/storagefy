@@ -100,6 +100,29 @@ describe.each([
   });
 });
 
+describe("getPiniaAdapter — the methods it gives", () => {
+  it("every method of the store adapter, bound to it: destructured, flush, destroy and destroyAll work", async () => {
+    const storagefy = await freshEntryPoint();
+    const { createPinia, defineStore } = await import("pinia");
+    const storage = storagefy.startStoragefy({ ...quiet, adapter: "localStorage" });
+    const { setInStorage, flush, destroy, destroyAll } = storagefy.getPiniaAdapter();
+    const pinia = createPinia();
+    const user = defineStore("user", { state: () => ({ name: "Ana" }) })(pinia);
+    const cart = defineStore("cart", { state: () => ({ items: 0 }) })(pinia);
+    await setInStorage(user, "user");
+    await setInStorage(cart, "cart");
+
+    user.name = "Bia";
+    expect(await flush("user")).toBe(true);
+    expect(await storage.get("user")).toEqual({ name: "Bia" });
+
+    destroy("user");
+    await expect(flush("user")).rejects.toThrow('no store is kept under the key "user"');
+    destroyAll();
+    await expect(flush("cart")).rejects.toThrow('no store is kept under the key "cart"');
+  });
+});
+
 describe("set*Storage — loading and keeping a store", () => {
   it("setPiniaStorage loads what was kept and keeps every change", async () => {
     const storagefy = await freshEntryPoint();

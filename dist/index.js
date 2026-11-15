@@ -96,7 +96,10 @@ function getPiniaAdapter(options = {}) {
   }
   return {
     setInStorage: piniaAdapter.setInStorage.bind(piniaAdapter),
-    getFromStorage: piniaAdapter.getFromStorage.bind(piniaAdapter)
+    getFromStorage: piniaAdapter.getFromStorage.bind(piniaAdapter),
+    flush: piniaAdapter.flush.bind(piniaAdapter),
+    destroy: piniaAdapter.destroy.bind(piniaAdapter),
+    destroyAll: piniaAdapter.destroyAll.bind(piniaAdapter)
   };
 }
 function getReactAdapter(options = {}) {

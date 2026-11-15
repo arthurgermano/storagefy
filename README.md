@@ -132,6 +132,29 @@ store's state is written over what is stored.
 | `syncTabs` | Apply the changes of the other tabs to this store (see [Sync between tabs](#-sync-between-tabs)) |
 | `onError` | Called with an `Error` when the state could not be saved, or a change from another tab could not be read or applied |
 
+### `flush(key?)`
+
+Makes sure the state of a store is in storage: what the store holds now is written — unless it is stored already —
+and the answer comes once its writes are done. Call it before something that must not lose a change: signing out,
+leaving the page on purpose.
+
+```ts
+userStore.$reset();                              // the person's data, cleared in memory
+const stored = await pinia.flush("user");        // …and in storage: the page may close now
+```
+
+- Answers **`true`** when the state is stored — the one the store held when `flush` was called, or a newer one —
+  and **`false`** when a write was not saved (told through `onError`). It never rejects for a write.
+- The store's state is **read, not waited for**: a change the library has not told yet is written too, and when it
+  is told, nothing is written again. A state already stored writes nothing — no write, no message to the other tabs,
+  no new `timeout` expiration.
+- A write that failed before is written again.
+- **Without `key`**: every store of the adapter — `false` when any was not saved; the others are written all the same.
+- Called while `setInStorage` of the key is still running, it waits for it first.
+- After `destroy(key)` — or with a key no store is kept under — it **rejects**: a mistake of the app.
+- A React store with `subscribe` alone (it gives its state to its listeners only) cannot be read: `flush` writes
+  nothing of its own for it, and waits for its writes in progress.
+
 ### `destroy(key)` / `destroyAll()`
 
 Stops keeping the store of `key` (`destroyAll`: every store of the adapter): no more writes, no more changes from the
@@ -141,7 +164,8 @@ other tabs. What is stored stays, and the storage adapter goes on.
 
 - `getPiniaAdapter(options?)`, `getReactAdapter(options?)`, `getSvelteAdapter(options?)` — a store adapter over
   `options.adapter`, over a new storage adapter (`options.adapterParams`), or over the one `startStoragefy` created.
-  It is kept and returned again; `fresh: true` returns a new one, `forceRecreate: true` replaces it (the one replaced
+  `getPiniaAdapter` gives its methods, bound to it — `setInStorage`, `getFromStorage`, `flush`, `destroy`,
+  `destroyAll` — so they can be destructured. It is kept and returned again; `fresh: true` returns a new one, `forceRecreate: true` replaces it (the one replaced
   stops keeping its stores — keep them again).
 - `setPiniaStorage(store, key, options?)`, `setReactStorage(…)`, `setSvelteStorage(…)` — `getFromStorage` then
   `setInStorage`, with the store adapter kept.
@@ -244,6 +268,16 @@ import type {
   FrameworkAdapterOptions, // get*Adapter
 } from "storagefy";
 ```
+
+What this README documents is the interface; the rest of the adapters is `private` or `protected` in the
+declarations, so TypeScript refuses it — it may change in any version.
+
+## ⬆️ Upgrading to 1.5.0
+
+Nothing changes when the app runs. In TypeScript, the internals of the adapters — the stores kept (`stores`), the
+storage adapter under a store adapter, the password, the channel, the revisions, the writes in progress — are now
+`private` or `protected` in the declarations: an app that read them gets a type error. To know a store's state is
+stored, use [`flush`](#flushkey). See [CHANGELOG.md](CHANGELOG.md).
 
 ## ⬆️ Upgrading to 1.4.0
 

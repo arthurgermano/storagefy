@@ -75,35 +75,69 @@ class StorageAdapter {
     channelName = false,
     enableSyncTabs = false,
   } = {}) {
+    // Internal state is @private or @protected (for the adapters that extend this one): the declarations show it so,
+    // and an app that reaches it is refused by TypeScript — only what the README documents is the library's interface
     this._setEncryption(password, keyDerivation);
+    /** @protected */
     this.dbName = dbName;
+    /** @protected */
     this.encrypt = encrypt;
-    // The keys of the app start with the prefix; the namespace's own records are never listed (see _isRecord)
+    /**
+     * The keys of the app start with the prefix; the namespace's own records are never listed (see _isRecord)
+     * @private
+     */
     this.prefix = `${dbName}__`;
+    /** @protected */
     this.metaKey = `STRGF_${dbName}__meta`;
+    /** @protected */
     this.expireKey = `STRGF_${dbName}__expires`;
+    /** @protected */
     this.revisionKey = `STRGF_${dbName}__revisions`;
+    /** @private */
     this.adapterId = generateSimpleId(dbName);
-    /** What this adapter knows of the revisions of the writes (see helpers/revisions.js) */
+    /**
+     * What this adapter knows of the revisions of the writes (see helpers/revisions.js)
+     * @protected
+     */
     this.revisions = new RevisionBook(this.adapterId);
+    /** @private */
     this.expireCheckInterval = expireCheckInterval;
+    /** @protected */
     this.enableSyncTabs = enableSyncTabs || false;
-    /** Whether the tabs of the app share the storage (IndexedDB, localStorage): a tab can read what another wrote */
+    /**
+     * Whether the tabs of the app share the storage (IndexedDB, localStorage): a tab can read what another wrote
+     * @protected
+     */
     this.sharedBetweenTabs = false;
-    // The AES key of each storage key and derivation, derived once (PBKDF2 is slow on purpose). Kept as the promise,
-    // so concurrent reads and writes share one derivation.
+    /**
+     * The AES key of each storage key and derivation, derived once (PBKDF2 is slow on purpose). Kept as the promise,
+     * so concurrent reads and writes share one derivation.
+     * @private
+     */
     this._derivedKeys = new Map();
-    // The write in progress of each key: writes of a key run one after another, in the order they were asked
+    /**
+     * The write in progress of each key: writes of a key run one after another, in the order they were asked
+     * @private
+     */
     this._pendingWrites = new Map();
-    // The operation on every key in progress (reset, clear): it runs after the writes asked before it, and the
-    // writes asked after it wait for it
+    /**
+     * The operation on every key in progress (reset, clear): it runs after the writes asked before it, and the writes
+     * asked after it wait for it
+     * @private
+     */
     this._barrier = Promise.resolve();
-    /** @type {ReturnType<typeof setInterval> | null} The expiry watcher (the browser's and Node's timers differ) */
+    /**
+     * The expiry watcher (the browser's and Node's timers differ)
+     * @private
+     * @type {ReturnType<typeof setInterval> | null}
+     */
     this._expireTimer = null;
 
     if (channelName) {
       logInfo("StorageAdapter - Initializing cross-tab channel:", channelName);
+      /** @private */
       this.channelName = channelName;
+      /** @private */
       this.channel = new CrossTabChannel(channelName);
     } else {
       this.channel = null;
@@ -414,7 +448,9 @@ class StorageAdapter {
     if (keyDerivation !== undefined && !cryptoHelper.isKeyDerivation(keyDerivation)) {
       throw new Error(`Storagefy: keyDerivation must be one of ${cryptoHelper.KEY_DERIVATIONS.join(", ")}`);
     }
+    /** @private */
     this.password = password || null;
+    /** @private */
     this.keyDerivation = keyDerivation ?? cryptoHelper.DEFAULT_KEY_DERIVATION;
   }
 

@@ -32,11 +32,17 @@ class IndexedDBAdapter extends StorageAdapter {
     super(options);
     const { dbName, storeName, version = 1, description = "" } = options;
 
+    /** @private */
     this.isReady = false;
+    /** @private */
     this.storeName = storeName || `${dbName}_store`;
-    // One database for every tab of the app
+    /**
+     * One database for every tab of the app
+     * @protected
+     */
     this.sharedBetweenTabs = true;
 
+    /** @private */
     this.dbPromise = this._initDB({ dbName, version, description });
     // Every use awaits it and sees the failure; this keeps a database that cannot open from also being reported
     // as an unhandled rejection

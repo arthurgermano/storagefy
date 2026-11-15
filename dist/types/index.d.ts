@@ -90,13 +90,22 @@ export function getStorageAdapter(): IndexedDBAdapter | LocalStorageAdapter | Se
 /**
  * Gets a Pinia store adapter's methods.
  * @param {FrameworkAdapterOptions} [options]
- * @returns {{ setInStorage: PiniaAdapter["setInStorage"], getFromStorage: PiniaAdapter["getFromStorage"] }} The
- *   methods of the adapter kept — or, with `fresh`, a new adapter (it has the same methods).
+ * @returns {{
+ *   setInStorage: PiniaAdapter["setInStorage"],
+ *   getFromStorage: PiniaAdapter["getFromStorage"],
+ *   flush: PiniaAdapter["flush"],
+ *   destroy: PiniaAdapter["destroy"],
+ *   destroyAll: PiniaAdapter["destroyAll"]
+ * }} The methods of the adapter kept, bound to it (they may be destructured) — or, with `fresh`, a new adapter (it has
+ *   the same methods).
  * @throws {Error} If no storage adapter was given or started.
  */
 export function getPiniaAdapter(options?: FrameworkAdapterOptions): {
     setInStorage: PiniaAdapter["setInStorage"];
     getFromStorage: PiniaAdapter["getFromStorage"];
+    flush: PiniaAdapter["flush"];
+    destroy: PiniaAdapter["destroy"];
+    destroyAll: PiniaAdapter["destroyAll"];
 };
 /**
  * Gets a React store adapter.

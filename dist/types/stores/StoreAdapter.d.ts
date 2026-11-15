@@ -86,11 +86,20 @@ declare class StoreAdapter {
      * @throws {Error} If no storage adapter is given.
      */
     constructor(adapter: import("../adapters/StorageAdapter.js").default);
-    adapter: import("../adapters/StorageAdapter.js").default;
-    /** @type {Record<string, KeptStore>} */
-    stores: Record<string, KeptStore>;
-    /** @type {Map<string, string>} */
-    _loaded: Map<string, string>;
+    /** @protected */
+    protected adapter: import("../adapters/StorageAdapter.js").default;
+    /**
+     * The stores kept, by key
+     * @private
+     * @type {Record<string, KeptStore>}
+     */
+    private stores;
+    /**
+     * What getFromStorage loaded under each key (as JSON) and setInStorage has not started from yet
+     * @private
+     * @type {Map<string, string>}
+     */
+    private _loaded;
     /**
      * Keeps a store in storage under a key: its state is written now (unless storage already holds it) and on every
      * change after — replacing what was kept under that key before.
@@ -105,6 +114,26 @@ declare class StoreAdapter {
      * await piniaAdapter.setInStorage(useUserStore(), "user-data", { ignoreKeys: ["password", "token"] });
      */
     setInStorage(store: any, key: string, options?: SetInStorageOptions): Promise<boolean>;
+    /**
+     * Makes sure the state of a store is in storage: what the store holds now is written, unless it is stored already,
+     * and the answer comes once its writes are done. The store's state is read, not waited for: a change the store has
+     * not told yet (Pinia tells a direct change in a later task) is written too — and when it is told, it writes nothing
+     * more. Call it before something that must not lose a change, such as signing out.
+     *
+     * A store whose state cannot be read (a React store without getState nor get, which gives its state to its listeners
+     * only) is never written by flush — what is not read is not guessed: its writes in progress are waited for.
+     *
+     * Before setInStorage of the key is done, flush waits for it first. After destroy, or once the key is kept again, it
+     * only waits for the writes in progress.
+     * @param {string} [key] - The store's storage key. Without it: every store of this adapter.
+     * @returns {Promise<boolean>} true when the state is stored — the one the store held when flush was called, or a
+     *   newer one; false when a write was not saved (told through onError). It never rejects for a write.
+     * @throws {Error} If no store is kept under key — a mistake of the app.
+     * @example
+     * userStore.$reset();
+     * await piniaAdapter.flush("user-data"); // the cleared state is stored: the page may close
+     */
+    flush(key?: string): Promise<boolean>;
     /**
      * Loads what storage kept under a key into a store.
      * @param {any} store
@@ -126,11 +155,22 @@ declare class StoreAdapter {
     destroyAll(): void;
     /**
      * The state with the keys of ignoreKeys left out (see helpers/state.js omitKeys).
+     * @private
      * @param {Object} obj The object to process
      * @param {string[]} ignoreKeys Array of keys to omit. Supports dot-notation for nested keys.
      * @returns {Object} A new object with the specified keys set to undefined (left out of the JSON)
      */
-    omitKeys(obj: any, ignoreKeys: string[]): any;
+    private omitKeys;
+    /**
+     * What setInStorage does once the store is kept: reads what storage holds, subscribes to the store and makes its
+     * first write.
+     * @private
+     * @param {any} store
+     * @param {string} key
+     * @param {KeptStore} kept
+     * @returns {Promise<void>} Rejects when the first write threw.
+     */
+    private _startKeeping;
     /**
      * Starts keeping a store: what was kept under the key before stops (its subscriptions end).
      * @protected
@@ -155,6 +195,13 @@ declare class StoreAdapter {
      * @throws {Error} If it is not one.
      */
     protected _checkStore(store: any): void;
+    /**
+     * Whether the store's state can be read whenever asked (see _currentOf) — flush writes only a state it read.
+     * @protected
+     * @param {any} store
+     * @returns {boolean}
+     */
+    protected _canRead(store: any): boolean;
     /**
      * The store's state now.
      * @abstract

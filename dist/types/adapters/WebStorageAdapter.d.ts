@@ -38,7 +38,8 @@ declare class WebStorageAdapter extends StorageAdapter {
      * @throws {Error} If the storage is not available, or an encryption option is invalid.
      */
     constructor(options: import("./StorageAdapter.js").StorageAdapterOptions, kind: WebStorageKind);
-    kind: WebStorageKind;
+    /** @private */
+    private kind;
     /**
      * The storage, looked up on each use.
      * @private

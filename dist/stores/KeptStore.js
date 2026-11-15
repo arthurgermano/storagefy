@@ -5,12 +5,13 @@ class KeptStore {
   /**
    * @param {KeptStoreParts} parts
    */
-  constructor({ key, store, options, adapter, current, apply }) {
+  constructor({ key, store, options, adapter, current, readable, apply }) {
     this.key = key;
     this.store = store;
     this.options = { ...options, ignoreKeys: [...options.ignoreKeys ?? []] };
     this.adapter = adapter;
     this.current = current;
+    this.readable = readable;
     this.active = true;
     this.follower = null;
     this.revision = void 0;
@@ -18,6 +19,8 @@ class KeptStore {
     this._unsubscribe = null;
     this._latest = void 0;
     this._writing = null;
+    this._lastWriteFailed = false;
+    this._keeping = Promise.resolve();
     this._applying = false;
     this._queue = Promise.resolve();
     this._stored = void 0;
@@ -53,6 +56,16 @@ class KeptStore {
         this.put(value);
       }
     });
+  }
+  // ----------------------------------------------------------------------------------------------
+  /**
+   * Keeps what setInStorage does to start keeping the store: flush waits for it first.
+   * @param {Promise<void>} keeping - Rejects when the first write threw.
+   * @returns {Promise<void>} The same promise.
+   */
+  keeping(keeping) {
+    this._keeping = keeping;
+    return keeping;
   }
   // ----------------------------------------------------------------------------------------------
   /**
@@ -177,6 +190,7 @@ class KeptStore {
           this._latest = void 0;
           const { ignoreKeys, timeout } = this.options;
           const written = await this.adapter.set(this.key, omitKeys(next, ignoreKeys), timeout);
+          this._lastWriteFailed = written === false;
           if (written === false) {
             this._stored = void 0;
             this.report("save");
@@ -187,6 +201,7 @@ class KeptStore {
       } catch (error) {
         this._latest = void 0;
         this._stored = void 0;
+        this._lastWriteFailed = true;
         this.report("save", error);
         throw error;
       } finally {
@@ -213,6 +228,23 @@ class KeptStore {
       await this._writing.catch(() => {
       });
     }
+  }
+  // ----------------------------------------------------------------------------------------------
+  /**
+   * Makes sure the store's state is stored (see StoreAdapter.flush): after setInStorage's start, what the store holds
+   * now is written unless it is stored already — a change its library has not told yet included —, then its writes
+   * are waited for. A store no longer kept, or whose state cannot be read, only has its writes waited for.
+   * @returns {Promise<boolean>} Whether the last write was saved — true when nothing had to be written. Never rejects.
+   */
+  async flush() {
+    await this._keeping.catch(() => {
+    });
+    if (this.active && this.readable) {
+      this.onChange(this.current())?.catch(() => {
+      });
+    }
+    await this.ownWritesDone();
+    return !this._lastWriteFailed;
   }
   // ----------------------------------------------------------------------------------------------
   /**

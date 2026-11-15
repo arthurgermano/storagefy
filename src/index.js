@@ -230,8 +230,14 @@ function _keptAdapterFor(name) {
 /**
  * Gets a Pinia store adapter's methods.
  * @param {FrameworkAdapterOptions} [options]
- * @returns {{ setInStorage: PiniaAdapter["setInStorage"], getFromStorage: PiniaAdapter["getFromStorage"] }} The
- *   methods of the adapter kept — or, with `fresh`, a new adapter (it has the same methods).
+ * @returns {{
+ *   setInStorage: PiniaAdapter["setInStorage"],
+ *   getFromStorage: PiniaAdapter["getFromStorage"],
+ *   flush: PiniaAdapter["flush"],
+ *   destroy: PiniaAdapter["destroy"],
+ *   destroyAll: PiniaAdapter["destroyAll"]
+ * }} The methods of the adapter kept, bound to it (they may be destructured) — or, with `fresh`, a new adapter (it has
+ *   the same methods).
  * @throws {Error} If no storage adapter was given or started.
  */
 function getPiniaAdapter(options = {}) {
@@ -242,6 +248,9 @@ function getPiniaAdapter(options = {}) {
   return {
     setInStorage: piniaAdapter.setInStorage.bind(piniaAdapter),
     getFromStorage: piniaAdapter.getFromStorage.bind(piniaAdapter),
+    flush: piniaAdapter.flush.bind(piniaAdapter),
+    destroy: piniaAdapter.destroy.bind(piniaAdapter),
+    destroyAll: piniaAdapter.destroyAll.bind(piniaAdapter),
   };
 }
 

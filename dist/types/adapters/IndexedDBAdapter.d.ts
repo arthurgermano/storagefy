@@ -12,9 +12,12 @@ declare class IndexedDBAdapter extends StorageAdapter {
     constructor(options: import("./StorageAdapter.js").StorageAdapterOptions & {
         storeName?: string;
     });
-    isReady: boolean;
-    storeName: string;
-    dbPromise: Promise<IDBDatabase>;
+    /** @private */
+    private isReady;
+    /** @private */
+    private storeName;
+    /** @private */
+    private dbPromise;
     /**
      * Opens the database (creating the object store and the metadata the first time).
      *

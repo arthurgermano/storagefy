@@ -33,8 +33,12 @@ class WebStorageAdapter extends StorageAdapter {
     }
     super(options);
     const { dbName, version = 1, description = "" } = options;
+    /** @private */
     this.kind = kind;
-    // localStorage is one for every tab; each tab has a sessionStorage of its own
+    /**
+     * localStorage is one for every tab; each tab has a sessionStorage of its own
+     * @protected
+     */
     this.sharedBetweenTabs = kind.shared;
 
     this._initMeta({ dbName, version, description });

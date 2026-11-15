@@ -231,7 +231,7 @@ await setReactStorage(myStore, "settings", &#123;
         <pre class="strf-code-block">
           <code>
 // startStoragefy() must be called first
-const &#123; setInStorage, getFromStorage &#125; = getPiniaAdapter(&#123;
+const &#123; setInStorage, getFromStorage, flush &#125; = getPiniaAdapter(&#123;
   adapterParams: &#123; adapter: "sessionStorage", dbName: "my-vue-app" &#125;
 &#125;);
 
@@ -246,6 +246,10 @@ await setInStorage(myStore, "user", &#123;
   ],
   syncTabs: true
 &#125;);
+
+// Signing out: clear the store, then make sure the cleared state is stored
+myStore.$reset();
+await flush("user"); // true once stored — the page may close
           </code>
         </pre>
         <p>Or use the helper:</p>

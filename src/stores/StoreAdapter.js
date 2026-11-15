@@ -50,11 +50,21 @@ class StoreAdapter {
     if (!adapter) {
       logAndThrow("Adapter provided is not defined");
     }
+    // Internal state is @private or @protected: an app that reaches it is refused by TypeScript — flush is the way to
+    // know a store's state is stored, not its kept store's writes
+    /** @protected */
     this.adapter = adapter;
-    /** @type {Record<string, KeptStore>} */
+    /**
+     * The stores kept, by key
+     * @private
+     * @type {Record<string, KeptStore>}
+     */
     this.stores = {};
-    // What getFromStorage loaded under each key (as JSON) and setInStorage has not started from yet
-    /** @type {Map<string, string>} */
+    /**
+     * What getFromStorage loaded under each key (as JSON) and setInStorage has not started from yet
+     * @private
+     * @type {Map<string, string>}
+     */
     this._loaded = new Map();
   }
 
@@ -76,15 +86,41 @@ class StoreAdapter {
   async setInStorage(store, key, options = {}) {
     this._checkStore(store);
     const kept = this._keep(key, store, options);
-    await kept.start(this._takeLoaded(key));
-    // Kept again, or no longer, while storage was read
-    if (!kept.active) {
-      return true;
-    }
-    const { unsubscribe, firstWrite } = this._subscribe(store, kept);
-    kept.subscribed(unsubscribe);
-    await firstWrite;
+    await kept.keeping(this._startKeeping(store, key, kept));
     return true;
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * Makes sure the state of a store is in storage: what the store holds now is written, unless it is stored already,
+   * and the answer comes once its writes are done. The store's state is read, not waited for: a change the store has
+   * not told yet (Pinia tells a direct change in a later task) is written too — and when it is told, it writes nothing
+   * more. Call it before something that must not lose a change, such as signing out.
+   *
+   * A store whose state cannot be read (a React store without getState nor get, which gives its state to its listeners
+   * only) is never written by flush — what is not read is not guessed: its writes in progress are waited for.
+   *
+   * Before setInStorage of the key is done, flush waits for it first. After destroy, or once the key is kept again, it
+   * only waits for the writes in progress.
+   * @param {string} [key] - The store's storage key. Without it: every store of this adapter.
+   * @returns {Promise<boolean>} true when the state is stored — the one the store held when flush was called, or a
+   *   newer one; false when a write was not saved (told through onError). It never rejects for a write.
+   * @throws {Error} If no store is kept under key — a mistake of the app.
+   * @example
+   * userStore.$reset();
+   * await piniaAdapter.flush("user-data"); // the cleared state is stored: the page may close
+   */
+  async flush(key) {
+    if (key === undefined) {
+      const answers = await Promise.all(Object.values(this.stores).map((kept) => kept.flush()));
+      return answers.every(Boolean);
+    }
+    const kept = this.stores[key];
+    if (!kept) {
+      logAndThrow(`Storagefy: no store is kept under the key "${key}"`);
+    }
+    return kept.flush();
   }
 
   // ----------------------------------------------------------------------------------------------
@@ -143,12 +179,35 @@ class StoreAdapter {
 
   /**
    * The state with the keys of ignoreKeys left out (see helpers/state.js omitKeys).
+   * @private
    * @param {Object} obj The object to process
    * @param {string[]} ignoreKeys Array of keys to omit. Supports dot-notation for nested keys.
    * @returns {Object} A new object with the specified keys set to undefined (left out of the JSON)
    */
   omitKeys(obj, ignoreKeys) {
     return omitKeys(obj, ignoreKeys);
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * What setInStorage does once the store is kept: reads what storage holds, subscribes to the store and makes its
+   * first write.
+   * @private
+   * @param {any} store
+   * @param {string} key
+   * @param {KeptStore} kept
+   * @returns {Promise<void>} Rejects when the first write threw.
+   */
+  async _startKeeping(store, key, kept) {
+    await kept.start(this._takeLoaded(key));
+    // Kept again, or no longer, while storage was read
+    if (!kept.active) {
+      return;
+    }
+    const { unsubscribe, firstWrite } = this._subscribe(store, kept);
+    kept.subscribed(unsubscribe);
+    await firstWrite;
   }
 
   // ----------------------------------------------------------------------------------------------
@@ -169,6 +228,7 @@ class StoreAdapter {
       options,
       adapter: this.adapter,
       current: () => this._currentOf(store),
+      readable: this._canRead(store),
       apply: (incoming) => this._apply(store, incoming),
     });
     this.stores[key] = kept;
@@ -202,6 +262,18 @@ class StoreAdapter {
    */
   _checkStore(store) {
     throw new Error("Not implemented");
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+   * Whether the store's state can be read whenever asked (see _currentOf) — flush writes only a state it read.
+   * @protected
+   * @param {any} store
+   * @returns {boolean}
+   */
+  _canRead(store) {
+    return true;
   }
 
   // ----------------------------------------------------------------------------------------------

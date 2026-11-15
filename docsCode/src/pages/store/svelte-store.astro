@@ -361,6 +361,13 @@ sharedStore.update(state => (&#123; ...state, value: 'updated' &#125;));
             store — <code>&#123; onError &#125;</code> tells a stored state that cannot be read
           </li>
           <li>
+            <code>flush([key])</code>: Makes sure the state is in storage — what the store holds now is written, unless
+            it is stored already, and the promise resolves once its writes are done: <code>true</code> stored,
+            <code>false</code> a write was not saved (<code>onError</code> says why). It never rejects for a write.
+            Without <code>key</code>, every store of the adapter; a key no store is kept under rejects. Call it before
+            something that must not lose a change, such as signing out
+          </li>
+          <li>
             <code>destroy(key)</code>: Stops keeping the store of <code>key</code> — no more writes, no more changes from
             the other tabs. What is stored stays
           </li>
@@ -383,6 +390,10 @@ sharedStore.update(state => (&#123; ...state, value: 'updated' &#125;));
           Always call <code>getFromStorage</code> before <code
             >setInStorage</code
           > to hydrate your store with existing data
+        </li>
+        <li>
+          Before signing out (or anything that must not lose a change), clear the store and <code>await flush(key)</code>:
+          once it resolves, the cleared state is in storage and the page may close
         </li>
         <li>
           For simplicity, use the <code>setSvelteStorage</code> helper which handles

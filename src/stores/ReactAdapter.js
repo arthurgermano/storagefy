@@ -52,6 +52,19 @@ class ReactAdapter extends StoreAdapter {
   // ----------------------------------------------------------------------------------------------
 
   /**
+   * A store with getState or get is read whenever asked; one with subscribe alone tells its state to its listeners
+   * only — what _currentOf answers for it ({}) is not its state.
+   * @protected
+   * @param {any} store
+   * @returns {boolean}
+   */
+  _canRead(store) {
+    return typeof store.getState === "function" || typeof store.get === "function";
+  }
+
+  // ----------------------------------------------------------------------------------------------
+
+  /**
    * The store's state now, as far as its interface tells.
    * @protected
    * @param {any} store

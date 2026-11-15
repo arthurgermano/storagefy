@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.5.0
+
+### Added
+
+- **`flush(key?)`** on the store adapters (Pinia, React, Svelte, and in what `getPiniaAdapter` gives): makes sure the
+  state of a store is in storage. What the store holds now is written — unless it is stored already — and the answer
+  comes once its writes are done: `true` when the state is stored, `false` when a write was not saved (told through
+  `onError`); it never rejects for a write. The state is read, not waited for: a change the library has not told yet
+  is written too, and nothing more is written when it is told. Without `key`, every store of the adapter. Called
+  while `setInStorage` runs, it waits for it; with a key no store is kept under (or destroyed), it rejects — a mistake
+  of the app. A React store with `subscribe` alone cannot be read: flush writes nothing of its own for it and waits for
+  its writes in progress. Up to 1.4.0 an app could not know when a change was stored — before signing out, say — and
+  the only thing it could reach was internal: 1.4.0 changed it, and such a wait ended at once.
+- `getPiniaAdapter` also gives `destroy` and `destroyAll`, bound to the adapter like the other methods (the README
+  said it gave a store adapter; it gave two of its methods).
+
+### Changed
+
+- **The internals are `private` or `protected` in the declarations** — TypeScript refuses an app that reads them. The
+  README is the interface. Now internal: the stores kept (`stores`) and the storage adapter under a store adapter
+  (`adapter`), `omitKeys`; the storage adapters' state — `dbName`, `encrypt`, `password`, `keyDerivation`, the keys of
+  the namespace records, `revisions`, `channel`, `channelName`, `expireCheckInterval`, `enableSyncTabs`,
+  `sharedBetweenTabs`, the writes in progress —, and IndexedDB's `isReady`, `storeName`, `dbPromise`. Nothing changes
+  when the app runs.
+
 ## 1.4.0
 
 ### Fixed
